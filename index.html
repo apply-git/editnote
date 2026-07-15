@@ -1,0 +1,653 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>簡易 HTML 記事本</title>
+<style>
+  * { box-sizing: border-box; }
+  :root{
+    --bg:#f4f5f7; --panel:#ffffff; --border:#d9dce1; --ink:#1f2328;
+    --muted:#6b7280; --accent:#2563eb; --toolbar:#fbfcfd; --btn:#ffffff; --btnhover:#eef2ff;
+  }
+  :root[data-theme="dark"]{
+    --bg:#1a1b1e; --panel:#26282c; --border:#3a3d43; --ink:#e6e6e6;
+    --muted:#9aa0a6; --accent:#60a5fa; --toolbar:#212327; --btn:#2f3136; --btnhover:#3a3d44;
+  }
+  html,body{ margin:0; height:100%; font-family:"Microsoft JhengHei","Segoe UI",system-ui,sans-serif; color:var(--ink); background:var(--bg); }
+  #app{ display:flex; flex-direction:column; height:100vh; }
+
+  /* 工具列 */
+  #toolbar{
+    display:flex; flex-wrap:nowrap; gap:3px; align-items:center; white-space:nowrap;
+    padding:5px 8px; background:var(--toolbar); border-bottom:1px solid var(--border);
+    overflow-x:auto; overflow-y:hidden;
+  }
+  #toolbar::-webkit-scrollbar{ height:7px; }
+  #toolbar::-webkit-scrollbar-thumb{ background:var(--border); border-radius:4px; }
+  .brand{ font-weight:700; font-size:14px; margin:0 6px 0 2px; color:var(--ink); white-space:nowrap; }
+  #toolbar button, #toolbar label.filebtn{
+    display:inline-flex; align-items:center; gap:2px; flex:0 0 auto;
+    border:1px solid var(--border); background:var(--btn); color:var(--ink);
+    padding:4px 6px; border-radius:6px; font-size:12px; cursor:pointer; line-height:1; white-space:nowrap;
+  }
+  #toolbar button:hover, #toolbar label.filebtn:hover{ background:var(--btnhover); border-color:#c7d2fe; }
+  #toolbar button:active{ transform:translateY(1px); }
+  #toolbar button.on{ background:#dbeafe; border-color:#93c5fd; color:#1e3a8a; }
+  #toolbar button.primary{ background:#2563eb; border-color:#2563eb; color:#fff; }
+  #toolbar button.primary:hover{ background:#1d4ed8; }
+  #toolbar .sep{ width:1px; height:20px; background:var(--border); margin:0 3px; flex:0 0 auto; }
+  #toolbar select{ padding:4px 5px; border:1px solid var(--border); border-radius:6px; font-size:12px; background:var(--btn); color:var(--ink); flex:0 0 auto; }
+  #toolbar .brand, #toolbar .swatches{ flex:0 0 auto; }
+  #toolbar .b{ font-weight:700; } #toolbar .i{ font-style:italic; }
+  #toolbar .u{ text-decoration:underline; } #toolbar .s{ text-decoration:line-through; }
+  .swatches{ display:inline-flex; align-items:center; gap:3px; }
+  .swatches .lead{ font-size:12.5px; color:var(--muted); margin-right:1px; }
+  .sw{ width:17px; height:17px; border:1px solid rgba(0,0,0,.2); border-radius:4px; cursor:pointer; padding:0; }
+  .sw:hover{ outline:2px solid var(--accent); outline-offset:1px; }
+  .sw.clear, .sw.custom{ background:var(--btn); font-size:11px; line-height:1; display:inline-flex; align-items:center; justify-content:center; }
+  .filename{ margin-left:auto; color:var(--muted); font-size:12.5px; white-space:nowrap; padding-left:8px; }
+
+  /* 懸浮小視窗 */
+  .pop{ position:fixed; z-index:45; display:none; flex-direction:column; gap:4px; padding:8px;
+    background:var(--panel); border:1px solid var(--border); border-radius:9px; box-shadow:0 10px 26px rgba(0,0,0,.18); }
+  .pop.open{ display:flex; }
+  .pop.grid{ flex-direction:row; flex-wrap:wrap; max-width:196px; }
+  .pop button, .pop label.filebtn{ display:inline-flex; align-items:center; gap:4px; border:1px solid var(--border);
+    background:var(--btn); color:var(--ink); padding:6px 10px; border-radius:6px; font-size:12.5px; cursor:pointer; line-height:1; white-space:nowrap; }
+  .pop button:hover, .pop label.filebtn:hover{ background:var(--btnhover); border-color:#c7d2fe; }
+  .pop.grid button{ flex:0 0 auto; }
+  .pop.wide{ max-width:262px; }
+  .pop select{ padding:5px 6px; border:1px solid var(--border); border-radius:6px; font-size:12.5px; background:var(--btn); color:var(--ink); flex:0 0 auto; }
+  .pop .swatches{ flex:0 0 auto; }
+  .pop button.on{ background:#dbeafe; border-color:#93c5fd; color:#1e3a8a; }
+  .pop .b{ font-weight:700; } .pop .i{ font-style:italic; }
+  .pop .u{ text-decoration:underline; } .pop .s{ text-decoration:line-through; }
+  .pop-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex:0 0 100%;
+    font-size:12px; font-weight:600; color:var(--muted); cursor:move; user-select:none; touch-action:none;
+    padding:1px 2px 6px; margin-bottom:4px; border-bottom:1px solid var(--border); }
+  .pop-x{ border:0 !important; background:transparent !important; color:var(--muted) !important;
+    font-size:15px; padding:0 4px !important; line-height:1; cursor:pointer; }
+  .pop-x:hover{ color:#e11d48 !important; }
+
+  /* 分頁列 */
+  #tabbar{ display:flex; align-items:stretch; gap:2px; padding:4px 8px 0; background:var(--toolbar); border-bottom:1px solid var(--border); overflow-x:auto; }
+  .tab{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; font-size:12.5px; cursor:pointer;
+    background:var(--panel); border:1px solid var(--border); border-bottom:0; border-radius:7px 7px 0 0; color:var(--muted); white-space:nowrap; max-width:220px; }
+  .tab.active{ color:var(--ink); font-weight:600; background:#fff; }
+  :root[data-theme="dark"] .tab.active{ background:#2f3136; }
+  .tab .tname{ overflow:hidden; text-overflow:ellipsis; max-width:160px; }
+  .tab .x{ border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:13px; padding:0 2px; line-height:1; }
+  .tab .x:hover{ color:#e11d48; }
+  #newTab{ align-self:center; border:1px solid var(--border); background:var(--btn); color:var(--ink); border-radius:6px; padding:4px 9px; font-size:14px; cursor:pointer; margin-left:2px; }
+
+  /* 主體 */
+  #main{ flex:1; display:flex; min-height:0; }
+  .col{ display:flex; flex-direction:column; min-width:0; }
+  #leftCol{ flex:1 1 50%; }
+  #rightCol{ flex:1 1 50%; }
+  #vgutter{ flex:0 0 6px; cursor:col-resize; background:var(--border); touch-action:none; }
+  #hgutter{ flex:0 0 6px; cursor:row-resize; background:var(--border); touch-action:none; }
+  #vgutter:hover, #hgutter:hover{ background:var(--accent); }
+  .caption{ padding:6px 12px; font-size:12px; color:var(--muted); background:var(--panel);
+    border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  #editor{ flex:1; overflow:auto; padding:22px 26px; background:#fff; outline:none; font-size:16px; line-height:1.7; color:#1f2328; }
+  #editor:empty:before{ content:"在這裡開始寫…（貼上截圖會自動內嵌）"; color:#aab; }
+  #editor img{ max-width:100%; height:auto; }
+  #editor table, #preview table{ border-collapse:collapse; }
+  #editor td,#editor th,#preview td,#preview th{ border:1px solid #999; padding:6px 10px; min-width:40px; }
+  #editor blockquote,#preview blockquote{ border-left:4px solid #cbd5e1; margin:8px 0; padding:4px 14px; color:#475569; }
+  #previewSec{ flex:2; display:flex; flex-direction:column; min-height:0; border-bottom:1px solid var(--border); }
+  #preview{ flex:1; overflow:auto; padding:22px 26px; background:#fff; font-size:16px; line-height:1.7; color:#1f2328; }
+  #preview img{ max-width:100%; height:auto; }
+  #sourceSec{ flex:1; display:flex; flex-direction:column; min-height:110px; }
+  #code{ flex:1; width:100%; border:0; outline:none; resize:none; font-family:Consolas,"Courier New",monospace;
+    font-size:12.5px; line-height:1.55; padding:10px 14px; color:#334; background:#fafbfc; }
+
+  /* 狀態列 */
+  #statusbar{ padding:4px 12px; font-size:12px; color:var(--muted); background:var(--toolbar); border-top:1px solid var(--border); display:flex; gap:16px; }
+
+  /* 尋找/取代 */
+  #findPanel{ position:fixed; top:96px; right:18px; z-index:50; display:none; gap:6px;
+    background:var(--panel); border:1px solid var(--border); border-radius:9px; padding:10px; box-shadow:0 8px 24px rgba(0,0,0,.16); flex-direction:column; width:250px; }
+  #findPanel.open{ display:flex; }
+  #findPanel input{ border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:13px; background:var(--btn); color:var(--ink); }
+  #findPanel .row{ display:flex; gap:6px; }
+  #findPanel button{ flex:1; border:1px solid var(--border); background:var(--btn); color:var(--ink); border-radius:6px; padding:6px; font-size:12.5px; cursor:pointer; }
+  #findPanel button:hover{ background:var(--btnhover); }
+
+  /* 專注模式 */
+  #app.focus #toolbar, #app.focus #tabbar, #app.focus #rightCol, #app.focus #vgutter, #app.focus #statusbar, #app.focus .caption{ display:none !important; }
+  #app.focus #leftCol{ border-right:0; }
+  #app.focus #editor{ max-width:820px; margin:0 auto; padding:40px 26px; }
+  #focusExit{ position:fixed; top:12px; right:14px; z-index:60; display:none; border:1px solid var(--border); background:var(--btn); color:var(--ink); border-radius:6px; padding:6px 10px; font-size:12.5px; cursor:pointer; }
+  #app.focus #focusExit{ display:inline-block; }
+
+  @media print{
+    #toolbar,#tabbar,#rightCol,#vgutter,#statusbar,.caption,#findPanel,#focusExit{ display:none !important; }
+    #app,#main,#leftCol{ height:auto; display:block; border:0; }
+    #editor{ overflow:visible; padding:0; }
+  }
+
+  /* 手機版排版 */
+  @media (max-width:768px){
+    #toolbar{ gap:4px; padding:6px; flex-wrap:wrap; overflow-x:visible; white-space:normal; }
+    #toolbar button, #toolbar label.filebtn{ padding:8px 11px; font-size:13px; }
+    #toolbar select{ padding:7px 8px; font-size:13px; }
+    #toolbar .brand{ font-size:13px; }
+    .sw{ width:20px; height:20px; }
+    .filename{ font-size:11px; margin-left:0; width:100%; padding-left:0; }
+    #main{ flex-direction:column; }
+    #vgutter{ display:none; }
+    #leftCol{ flex:1 1 50%; }
+    #rightCol{ flex:1 1 50%; }
+    #hgutter{ flex:0 0 8px; }
+    #editor, #preview{ padding:16px; }
+    #tabbar .tab{ padding:8px 10px; }
+    .pop{ width:min(300px, calc(100vw - 48px)); max-width:none; }
+    .pop.grid{ width:min(300px, calc(100vw - 48px)); max-width:none; }
+    .pop button, .pop label.filebtn{ padding:9px 12px; font-size:13px; }
+    #findPanel{ left:8px; right:8px; top:auto; bottom:12px; width:auto; }
+  }
+</style>
+
+<div id="app">
+  <div id="toolbar">
+    <span class="brand">記事本</span>
+    <button data-pop="popFile" title="檔案：新增、開啟、存檔、另存、匯出、發佈">☰ 檔案 ▾</button>
+    <button data-pop="popText" title="文字：粗斜底刪、字級、顏色、螢光、清除格式">🅐 文字 ▾</button>
+    <button data-pop="popInsert" title="插入：連結、圖片、表格">＋ 插入 ▾</button>
+    <button data-pop="popMore" title="更多：段落、檢視、復原/重做">⋯ 功能 ▾</button>
+
+    <span class="filename" id="fileName">未命名.html</span>
+  </div>
+
+  <!-- 懸浮小視窗（大類基底，細項在此） -->
+  <div class="pop grid wide" id="popText">
+    <div class="pop-head">文字樣式<button class="pop-x" title="關閉">×</button></div>
+    <button class="b" data-cmd="bold" title="粗體 (Ctrl+B)">B</button>
+    <button class="i" data-cmd="italic" title="斜體 (Ctrl+I)">I</button>
+    <button class="u" data-cmd="underline" title="底線 (Ctrl+U)">U</button>
+    <button class="s" data-cmd="strikeThrough" title="刪除線">S</button>
+    <select id="fontsize" title="字級大小">
+      <option value="12px">12</option><option value="14px">14</option>
+      <option value="16px" selected>字級</option><option value="18px">18</option>
+      <option value="20px">20</option><option value="24px">24</option>
+      <option value="28px">28</option><option value="32px">32</option>
+    </select>
+    <button data-cmd="removeFormat" id="clearFmt" title="清除格式">✕格式</button>
+    <span class="swatches" id="forePalette"><span class="lead b">A</span></span>
+    <span class="swatches" id="hilitePalette"><span class="lead">🖍</span></span>
+  </div>
+  <div class="pop grid wide" id="popPara">
+    <div class="pop-head">段落<button class="pop-x" title="關閉">×</button></div>
+    <select id="block" title="段落樣式">
+      <option value="P">內文</option><option value="H1">標題 1</option>
+      <option value="H2">標題 2</option><option value="H3">標題 3</option>
+    </select>
+    <button data-cmd="insertUnorderedList" title="項目符號清單">• 清單</button>
+    <button data-cmd="insertOrderedList" title="編號清單">1. 清單</button>
+    <button data-cmd="justifyLeft" title="靠左">左</button>
+    <button data-cmd="justifyCenter" title="置中">中</button>
+    <button data-cmd="justifyRight" title="靠右">右</button>
+    <button data-cmd="justifyFull" title="兩端對齊">齊</button>
+    <button data-cmd="outdent" title="減少縮排">⇤ 減縮排</button>
+    <button data-cmd="indent" title="增加縮排">⇥ 加縮排</button>
+    <button id="insHr" title="分隔線">― 分隔線</button>
+    <button id="insQuote" title="引用區塊">❝ 引用</button>
+  </div>
+  <div class="pop grid" id="popInsert">
+    <div class="pop-head">插入<button class="pop-x" title="關閉">×</button></div>
+    <button id="insLink" title="插入連結">🔗 連結</button>
+    <label class="filebtn" title="從電腦選圖片，內嵌並自動壓縮">🖼 圖片<input id="insImage" type="file" accept="image/*" hidden></label>
+    <button id="insTable" title="插入表格">▦ 插入表格</button>
+    <button id="rowAdd" title="下方加一列">＋列</button>
+    <button id="rowDel" title="刪這一列">－列</button>
+    <button id="colAdd" title="右方加一欄">＋欄</button>
+    <button id="colDel" title="刪這一欄">－欄</button>
+  </div>
+  <div class="pop" id="popFile">
+    <div class="pop-head">檔案<button class="pop-x" title="關閉">×</button></div>
+    <button id="newDoc" title="新增分頁">🆕 新增分頁</button>
+    <label class="filebtn" title="開啟既有 .html（開成新分頁）">📂 開啟<input id="openFile" type="file" accept=".html,.htm" hidden></label>
+    <button id="save" class="primary" title="存檔（用目前檔名）">💾 存檔</button>
+    <button id="saveAs" title="另存新檔（自訂檔名）">💾 另存新檔</button>
+    <button id="expMd" title="匯出 Markdown (.md)">⬇ 匯出 MD</button>
+    <button id="expPdf" title="列印 / 匯出 PDF">🖨 列印 / PDF</button>
+    <button id="pub" title="一鍵存成 index.html 到你選的發佈資料夾">📤 發佈到資料夾</button>
+    <button id="pubDir" title="換一個發佈資料夾（開新網頁專案）">📁 換發佈資料夾</button>
+  </div>
+  <div class="pop grid" id="popView">
+    <div class="pop-head">檢視<button class="pop-x" title="關閉">×</button></div>
+    <button id="togglePreview" class="on" title="顯示/隱藏 即時預覽">👁 預覽</button>
+    <button id="toggleSource" class="on" title="顯示/隱藏 原始碼">&lt;/&gt; 原始碼</button>
+    <button id="find" title="尋找/取代 (Ctrl+F)">🔍 尋找</button>
+    <button id="toggleDark" title="深色模式">🌙 深色</button>
+    <button id="focusBtn" title="專注寫作 (Esc 離開)">⛶ 專注</button>
+  </div>
+  <div class="pop grid" id="popMore">
+    <div class="pop-head">功能<button class="pop-x" title="關閉">×</button></div>
+    <button data-pop="popPara" title="段落：標題、清單、對齊、縮排、分隔線、引用">¶ 段落 ▾</button>
+    <button data-pop="popView" title="檢視：預覽、原始碼、尋找、深色、專注">👁 檢視 ▾</button>
+    <button id="undo" title="復原 (Ctrl+Z)">↶ 復原</button>
+    <button id="redo" title="重做 (Ctrl+Y)">↷ 重做</button>
+  </div>
+
+  <div id="tabbar">
+    <span id="tabs" style="display:flex;gap:2px;"></span>
+    <button id="newTab" title="新分頁">＋</button>
+  </div>
+
+  <div id="main">
+    <div id="leftCol" class="col">
+      <div class="caption"><span>✍️ 所見即所得編輯</span></div>
+      <div id="editor" contenteditable="true"></div>
+    </div>
+    <div id="vgutter" title="拖曳調整左右寬度"></div>
+    <div id="rightCol" class="col">
+      <div id="previewSec">
+        <div class="caption"><span>👁 即所得預覽（實際輸出的樣子）</span></div>
+        <div id="preview"></div>
+      </div>
+      <div id="hgutter" title="拖曳調整上下高度"></div>
+      <div id="sourceSec">
+        <div class="caption"><span>&lt;/&gt; HTML 原始碼（可直接編輯）</span><span style="color:#9aa">改完點回左邊生效</span></div>
+        <textarea id="code" spellcheck="false"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div id="statusbar"><span id="count">字元 0</span><span id="autosaveInfo">自動儲存：開</span></div>
+</div>
+
+<button id="focusExit">✕ 離開專注</button>
+
+<div id="findPanel">
+  <input id="findText" placeholder="尋找…">
+  <input id="replText" placeholder="取代為…">
+  <div class="row"><button id="findNext">找下一個</button><button id="replOne">取代</button></div>
+  <div class="row"><button id="replAll">全部取代</button><button id="findClose">關閉</button></div>
+</div>
+
+<script>
+(function(){
+  const editor=document.getElementById('editor'), preview=document.getElementById('preview'), code=document.getElementById('code');
+  const fileNameEl=document.getElementById('fileName');
+  let currentName='未命名.html';
+  try{ document.execCommand('styleWithCSS', false, true); }catch(e){}
+
+  const CHEAT = [
+    '<h1>📝 功能速查小抄</h1>',
+    '<p>這裡是<b>所見即所得</b>編輯區，右上<u>即所得預覽</u>、右下 HTML 原始碼。內容會<b>自動存到瀏覽器</b>，關掉也不會不見；要另存成檔案再按 <b>存檔</b>。</p>',
+    '<table><tr><th>類別</th><th>功能</th></tr>',
+    '<tr><td>文字</td><td>B/I/U/S、字級、A 色票、🖍 螢光、對齊 左中右齊、✕格式</td></tr>',
+    '<tr><td>段落</td><td>內文/標題、• 清單、1. 清單、⇤⇥ 縮排、―線 分隔線、❝引用</td></tr>',
+    '<tr><td>插入</td><td>🔗 連結、🖼 圖片（自動壓縮）、▦ 表格（＋列/－列/＋欄/－欄）、拖曳圖片檔、Ctrl+V 貼截圖</td></tr>',
+    '<tr><td>檔案</td><td>分頁(＋)、新增、開啟、存檔、另存新檔、匯出 MD、PDF 列印</td></tr>',
+    '<tr><td>檢視</td><td>🔍 尋找取代、👁 預覽、&lt;/&gt; 原始碼、🌙 深色、⛶ 專注寫作</td></tr>',
+    '</table><p><i>—— 準備好就從這裡開始寫吧！</i></p>'
+  ].join('');
+
+  function sync(){ const h=editor.innerHTML; preview.innerHTML=h; code.value=h; updateCount(); }
+  function exec(cmd,val){ editor.focus(); restoreSel(); document.execCommand(cmd,false,val||null); sync(); persist(); saveSel(); }
+  function updateCount(){
+    const t=editor.innerText||''; const chars=t.replace(/\s/g,'').length;
+    const words=(t.match(/[A-Za-z0-9]+|[一-鿿]/g)||[]).length;
+    document.getElementById('count').textContent='字元 '+chars+' ｜ 字/詞 '+words;
+  }
+
+  // 選取記憶
+  let savedRange=null;
+  function saveSel(){ const s=window.getSelection(); if(s.rangeCount && editor.contains(s.anchorNode)) savedRange=s.getRangeAt(0).cloneRange(); }
+  function restoreSel(){ if(savedRange){ const s=window.getSelection(); s.removeAllRanges(); s.addRange(savedRange); } }
+  editor.addEventListener('mouseup', saveSel);
+  editor.addEventListener('keyup', function(){ saveSel(); });
+
+  /* ---------- 分頁 + 自動存檔 ---------- */
+  let docs=[], activeId=null;
+  const DKEY='notepad_docs', AKEY='notepad_active';
+  function genId(){ return 'd'+Date.now()+Math.floor(Math.random()*1000); }
+  function activeDoc(){ return docs.find(d=>d.id===activeId); }
+  function persist(){
+    const d=activeDoc(); if(d){ d.html=editor.innerHTML; d.name=currentName; }
+    try{ localStorage.setItem(DKEY, JSON.stringify(docs)); localStorage.setItem(AKEY, activeId); }catch(e){}
+  }
+  function renderTabs(){
+    const wrap=document.getElementById('tabs'); wrap.innerHTML='';
+    docs.forEach(function(d){
+      const t=document.createElement('span'); t.className='tab'+(d.id===activeId?' active':'');
+      const n=document.createElement('span'); n.className='tname'; n.textContent=d.name; t.appendChild(n);
+      const x=document.createElement('button'); x.className='x'; x.textContent='×'; x.title='關閉分頁';
+      x.addEventListener('click', function(e){ e.stopPropagation(); closeTab(d.id); });
+      t.appendChild(x);
+      t.addEventListener('click', function(){ switchTo(d.id); });
+      wrap.appendChild(t);
+    });
+  }
+  function loadActive(){ const d=activeDoc(); editor.innerHTML=d.html; currentName=d.name; fileNameEl.textContent=currentName; sync(); renderTabs(); }
+  function switchTo(id){ persist(); activeId=id; loadActive(); try{ localStorage.setItem(AKEY,activeId); }catch(e){} }
+  function newTab(html,name){ persist(); const id=genId(); docs.push({id:id,name:name||'未命名.html',html:html||'<p><br></p>'}); activeId=id; loadActive(); persist(); }
+  function closeTab(id){
+    const i=docs.findIndex(d=>d.id===id); if(i<0) return;
+    if(docs.length===1){ docs[0]={id:genId(),name:'未命名.html',html:'<p><br></p>'}; activeId=docs[0].id; }
+    else { const wasActive=(id===activeId); docs.splice(i,1); if(wasActive) activeId=docs[Math.max(0,i-1)].id; }
+    loadActive(); persist();
+  }
+  document.getElementById('newTab').addEventListener('click', function(){ newTab(); });
+
+  /* ---------- 格式 ---------- */
+  document.querySelectorAll('[data-cmd]').forEach(function(b){
+    b.addEventListener('click', function(){ exec(b.dataset.cmd); });
+  });
+  document.getElementById('undo').addEventListener('click', function(){ exec('undo'); });
+  document.getElementById('redo').addEventListener('click', function(){ exec('redo'); });
+  document.getElementById('insHr').addEventListener('click', function(){ exec('insertHTML','<hr>'); });
+  document.getElementById('insQuote').addEventListener('click', function(){ exec('formatBlock','blockquote'); });
+
+  document.getElementById('fontsize').addEventListener('change', function(){
+    const px=this.value; editor.focus(); restoreSel();
+    document.execCommand('fontSize',false,'7');
+    editor.querySelectorAll('font[size="7"]').forEach(function(f){ f.removeAttribute('size'); f.style.fontSize=px; });
+    sync(); saveSel(); persist(); this.selectedIndex=2;
+  });
+  document.getElementById('block').addEventListener('change', function(){ exec('formatBlock', this.value); });
+
+  // 色票
+  const FORE=[['黑','#1f2328'],['紅','#e11d48'],['橘','#ea580c'],['綠','#16a34a'],['藍','#2563eb'],['紫','#7c3aed']];
+  const HILITE=[['黃','#fff176'],['綠','#b9f6ca'],['藍','#a5d8ff'],['粉','#ffc9c9'],['橘','#ffd8a8'],['清除','transparent']];
+  function applyColor(kind,color){ editor.focus(); restoreSel();
+    if(kind==='fore') document.execCommand('foreColor',false,color);
+    else if(!document.execCommand('hiliteColor',false,color)) document.execCommand('backColor',false,color);
+    sync(); saveSel(); persist();
+  }
+  function buildSwatches(el,list,kind){
+    list.forEach(function(p){ const s=document.createElement('button'); s.type='button'; s.className='sw'; s.title=p[0];
+      if(p[1]==='transparent'){ s.classList.add('clear'); s.textContent='⌫'; } else s.style.background=p[1];
+      s.addEventListener('click', function(){ applyColor(kind,p[1]); }); el.appendChild(s); });
+    const c=document.createElement('label'); c.className='sw custom'; c.title='自訂顏色'; c.textContent='🎨';
+    const inp=document.createElement('input'); inp.type='color'; inp.hidden=true;
+    inp.addEventListener('input', function(){ applyColor(kind,this.value); }); c.appendChild(inp); el.appendChild(c);
+  }
+  buildSwatches(document.getElementById('forePalette'),FORE,'fore');
+  buildSwatches(document.getElementById('hilitePalette'),HILITE,'hilite');
+
+  // 連結
+  document.getElementById('insLink').addEventListener('click', function(){
+    const url=prompt('連結網址：','https://'); if(!url) return;
+    editor.focus(); restoreSel(); const sel=window.getSelection();
+    if(sel && sel.toString()) document.execCommand('createLink',false,url);
+    else document.execCommand('insertHTML',false,'<a href="'+url+'">'+url+'</a>');
+    sync(); persist();
+  });
+
+  /* ---------- 表格 ---------- */
+  document.getElementById('insTable').addEventListener('click', function(){
+    const r=parseInt(prompt('表格列數（橫向幾行）？','3'),10);
+    const c=parseInt(prompt('表格欄數（直向幾欄）？','3'),10);
+    if(!r||!c||r<1||c<1) return;
+    let h='<table>'; for(let i=0;i<r;i++){ h+='<tr>'; for(let j=0;j<c;j++) h+='<td>&nbsp;</td>'; h+='</tr>'; } h+='</table><p></p>';
+    exec('insertHTML',h);
+  });
+  let curCell=null;
+  editor.addEventListener('click', function(e){ const td=e.target.closest?e.target.closest('td,th'):null; if(td) curCell=td; });
+  function cellIndex(td){ return Array.prototype.indexOf.call(td.parentNode.children, td); }
+  document.getElementById('rowAdd').addEventListener('click', function(){
+    if(!curCell) return alert('請先點一下表格內的儲存格'); const tr=curCell.parentNode; const nr=tr.cloneNode(true);
+    nr.querySelectorAll('td,th').forEach(function(c){ c.innerHTML='&nbsp;'; }); tr.after(nr); sync(); persist();
+  });
+  document.getElementById('rowDel').addEventListener('click', function(){
+    if(!curCell) return alert('請先點一下表格內的儲存格'); const tr=curCell.parentNode; const tb=tr.closest('table');
+    if(tb.querySelectorAll('tr').length<=1){ tb.remove(); curCell=null; } else tr.remove(); sync(); persist();
+  });
+  document.getElementById('colAdd').addEventListener('click', function(){
+    if(!curCell) return alert('請先點一下表格內的儲存格'); const idx=cellIndex(curCell); const tb=curCell.closest('table');
+    tb.querySelectorAll('tr').forEach(function(tr){ const ref=tr.children[idx]; const nc=document.createElement(ref&&ref.tagName==='TH'?'th':'td'); nc.innerHTML='&nbsp;'; if(ref) ref.after(nc); else tr.appendChild(nc); }); sync(); persist();
+  });
+  document.getElementById('colDel').addEventListener('click', function(){
+    if(!curCell) return alert('請先點一下表格內的儲存格'); const idx=cellIndex(curCell); const tb=curCell.closest('table');
+    tb.querySelectorAll('tr').forEach(function(tr){ if(tr.children[idx]) tr.children[idx].remove(); });
+    if(!tb.querySelector('td,th')) tb.remove(); curCell=null; sync(); persist();
+  });
+
+  /* ---------- 圖片：壓縮 + 貼上 + 拖曳 ---------- */
+  function compress(dataURL,cb){
+    const img=new Image();
+    img.onload=function(){ let w=img.width,h=img.height; const MAX=1600;
+      if(w<=MAX && dataURL.length<200000){ cb(dataURL); return; }
+      const sc=Math.min(1,MAX/w); w=Math.round(w*sc); h=Math.round(h*sc);
+      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      try{ const out=cv.toDataURL('image/jpeg',0.85); cb(out.length<dataURL.length?out:dataURL); }catch(e){ cb(dataURL); } };
+    img.onerror=function(){ cb(dataURL); }; img.src=dataURL;
+  }
+  function insertImg(dataURL){ compress(dataURL,function(out){ editor.focus(); restoreSel(); document.execCommand('insertHTML',false,'<img src="'+out+'">'); sync(); persist(); saveSel(); }); }
+  document.getElementById('insImage').addEventListener('change', function(){ const f=this.files[0]; if(!f) return; const rd=new FileReader(); rd.onload=function(){ insertImg(rd.result); }; rd.readAsDataURL(f); this.value=''; });
+
+  function cleanPasted(html){
+    html=html.replace(/<!--[\s\S]*?-->/g,'').replace(/<\/?(o:p|xml|meta|link|style|script|title|head)[^>]*>/gi,'');
+    const t=document.createElement('div'); t.innerHTML=html;
+    t.querySelectorAll('*').forEach(function(el){
+      Array.prototype.slice.call(el.attributes).forEach(function(a){ if(!/^(href|src|colspan|rowspan|alt)$/i.test(a.name)) el.removeAttribute(a.name); });
+    });
+    return t.innerHTML;
+  }
+  editor.addEventListener('paste', function(e){
+    const dt=e.clipboardData||window.clipboardData; if(!dt) return;
+    for(const it of dt.items){ if(it.type && it.type.indexOf('image')===0){ e.preventDefault(); const rd=new FileReader(); rd.onload=function(){ insertImg(rd.result); }; rd.readAsDataURL(it.getAsFile()); return; } }
+    const html=dt.getData('text/html');
+    if(html){ e.preventDefault(); document.execCommand('insertHTML',false,cleanPasted(html)); sync(); persist(); }
+  });
+  editor.addEventListener('dragover', function(e){ e.preventDefault(); });
+  editor.addEventListener('drop', function(e){
+    const files=e.dataTransfer&&e.dataTransfer.files;
+    if(files&&files.length){ e.preventDefault(); Array.prototype.forEach.call(files,function(f){ if(f.type.indexOf('image')===0){ const rd=new FileReader(); rd.onload=function(){ insertImg(rd.result); }; rd.readAsDataURL(f); } }); }
+  });
+
+  editor.addEventListener('input', function(){ sync(); persist(); });
+  code.addEventListener('input', function(){ editor.innerHTML=code.value; preview.innerHTML=code.value; updateCount(); persist(); });
+
+  /* ---------- 檔案：新增/開啟/存檔/另存/匯出 ---------- */
+  document.getElementById('newDoc').addEventListener('click', function(){ newTab(); editor.focus(); });
+  function download(name,text,mime){ const b=new Blob([text],{type:(mime||'text/html')+';charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=name; a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); },1000); }
+  function fullDoc(name){ return '<!doctype html>\n<html lang="zh-Hant">\n<head>\n<meta charset="utf-8">\n<title>'+name.replace(/\.html?$/i,'')+'</title>\n</head>\n<body>\n'+editor.innerHTML+'\n</body>\n</html>'; }
+  document.getElementById('save').addEventListener('click', function(){ if(currentName==='未命名.html'){ document.getElementById('saveAs').click(); return; } download(currentName, fullDoc(currentName)); });
+  document.getElementById('saveAs').addEventListener('click', function(){
+    let name=prompt('另存檔名（.html 可省略）：', currentName.replace(/\.html?$/i,'')); if(name===null) return;
+    name=name.trim()||'未命名'; if(!/\.html?$/i.test(name)) name+='.html';
+    currentName=name; fileNameEl.textContent=name; download(name, fullDoc(name)); persist(); renderTabs();
+  });
+  document.getElementById('openFile').addEventListener('change', function(){
+    const f=this.files[0]; if(!f) return; const rd=new FileReader();
+    rd.onload=function(){ const html=rd.result; const m=html.match(/<body[^>]*>([\s\S]*?)<\/body>/i); newTab(m?m[1]:html, f.name); };
+    rd.readAsText(f,'utf-8'); this.value='';
+  });
+
+  /* ---------- 一鍵發佈到資料夾 ---------- */
+  // 每個網頁專案資料夾會自動附上這支 發佈.bat；雙擊它即可上傳（專案名＝資料夾名）
+  const PUB_BAT = [
+    '@echo off',
+    'chcp 65001 >nul',
+    'setlocal',
+    'set "SRC=%~dp0."',
+    'set "NAME="',
+    'if not "%~1"=="" set "SRC=%~f1"',
+    'if not "%~1"=="" set "NAME=%~n1"',
+    'if "%NAME%"=="" for %%I in ("%~dp0.") do set "NAME=%%~nxI"',
+    'echo ============================================',
+    'echo   Deploy to Cloudflare Pages',
+    'echo   Folder / project: %NAME%',
+    'echo ============================================',
+    'if not exist "%SRC%\\index.html" ( echo [ERROR] no index.html in this folder & pause & exit /b 1 )',
+    'set /p PROJ=Cloudflare project name (lowercase, Enter=%NAME%): ',
+    'if "%PROJ%"=="" set "PROJ=%NAME%"',
+    'set /p OK=Upload now? (Y/N): ',
+    'if /i not "%OK%"=="Y" ( echo canceled & pause & exit /b 0 )',
+    'set "TMP=%TEMP%\\pgs_%RANDOM%"',
+    'mkdir "%TMP%"',
+    'copy /y "%SRC%\\*.html" "%TMP%\\" >nul',
+    'call npx wrangler@3 pages deploy "%TMP%" --project-name "%PROJ%"',
+    'rmdir /s /q "%TMP%"',
+    'echo.',
+    'echo Done. The URL shown above is your site.',
+    'pause'
+  ].join('\r\n');
+
+  let pubDirHandle=null;
+  async function ensureDir(){
+    if(pubDirHandle){
+      const q=await pubDirHandle.queryPermission({mode:'readwrite'});
+      if(q!=='granted'){ const rq=await pubDirHandle.requestPermission({mode:'readwrite'}); if(rq!=='granted') pubDirHandle=null; }
+    }
+    if(!pubDirHandle){ pubDirHandle=await window.showDirectoryPicker({mode:'readwrite'}); }
+    return pubDirHandle;
+  }
+  async function writeFile(dir,name,content){ const fh=await dir.getFileHandle(name,{create:true}); const w=await fh.createWritable(); await w.write(content); await w.close(); }
+  document.getElementById('pub').addEventListener('click', async function(){
+    const html=fullDoc('index.html');
+    if(window.showDirectoryPicker){
+      try{
+        const dir=await ensureDir();
+        await writeFile(dir,'index.html',html);
+        try{ await writeFile(dir,'發佈.bat',PUB_BAT); }catch(e){}
+        alert('✅ 已寫入「'+dir.name+'」資料夾的 index.html。\n接著雙擊該資料夾裡的「發佈.bat」即可上傳到 Cloudflare Pages。\n（要開新網頁專案就按 📁 換資料夾）');
+        return;
+      }catch(e){ if(e && e.name==='AbortError') return; }
+    }
+    download('index.html', html);
+    alert('你的瀏覽器不支援直接寫入資料夾，已改為「下載 index.html」。\n請把它放進一個資料夾，再用「發佈\\發佈.bat」上傳（把該資料夾拖到 發佈.bat 上）。');
+  });
+  document.getElementById('pubDir').addEventListener('click', function(){
+    pubDirHandle=null;
+    alert('已重設。下次按「📤 發佈」會請你選一個新資料夾，等於開一個新的網頁專案（資料夾名＝專案名，建議用英文小寫）。');
+  });
+
+  // Markdown 匯出
+  function listMd(node,ordered){ let out=''; let i=1; node.querySelectorAll(':scope>li').forEach(function(li){ out+=(ordered?(i++)+'. ':'- ')+nodeToMd(li).trim()+'\n'; }); return out; }
+  function tableMd(tb){ const rows=tb.querySelectorAll('tr'); if(!rows.length) return ''; let out='';
+    rows.forEach(function(tr,ri){ const cells=tr.querySelectorAll('td,th'); let line='|'; cells.forEach(function(c){ line+=' '+nodeToMd(c).trim().replace(/\n/g,' ')+' |'; }); out+=line+'\n';
+      if(ri===0){ let sep='|'; cells.forEach(function(){ sep+=' --- |'; }); out+=sep+'\n'; } }); return out; }
+  function nodeToMd(node){ let out='';
+    node.childNodes.forEach(function(n){
+      if(n.nodeType===3){ out+=n.textContent; return; } if(n.nodeType!==1) return;
+      const tag=n.tagName.toLowerCase(); const inner=nodeToMd(n);
+      switch(tag){
+        case 'h1': out+='\n# '+inner+'\n\n'; break; case 'h2': out+='\n## '+inner+'\n\n'; break; case 'h3': out+='\n### '+inner+'\n\n'; break;
+        case 'b': case 'strong': out+='**'+inner+'**'; break; case 'i': case 'em': out+='*'+inner+'*'; break;
+        case 's': case 'strike': case 'del': out+='~~'+inner+'~~'; break;
+        case 'a': out+='['+inner+']('+(n.getAttribute('href')||'')+')'; break;
+        case 'img': out+='!['+(n.getAttribute('alt')||'image')+']('+(n.getAttribute('src')||'')+')'; break;
+        case 'br': out+='\n'; break; case 'hr': out+='\n---\n\n'; break;
+        case 'p': case 'div': out+='\n'+inner+'\n\n'; break;
+        case 'blockquote': out+='\n> '+inner.trim().replace(/\n/g,'\n> ')+'\n\n'; break;
+        case 'ul': out+='\n'+listMd(n,false); break; case 'ol': out+='\n'+listMd(n,true); break;
+        case 'table': out+='\n'+tableMd(n)+'\n'; break;
+        default: out+=inner;
+      }
+    }); return out; }
+  document.getElementById('expMd').addEventListener('click', function(){
+    const md=nodeToMd(editor).replace(/\n{3,}/g,'\n\n').trim()+'\n';
+    download(currentName.replace(/\.html?$/i,'')+'.md', md, 'text/markdown');
+  });
+  document.getElementById('expPdf').addEventListener('click', function(){ window.print(); });
+
+  /* ---------- 檢視：預覽/原始碼/深色/專注 ---------- */
+  let showPreview=true, showSource=true;
+  const rightCol=document.getElementById('rightCol'), leftCol=document.getElementById('leftCol');
+  const previewSec=document.getElementById('previewSec'), sourceSec=document.getElementById('sourceSec');
+  const pBtn=document.getElementById('togglePreview'), sBtn=document.getElementById('toggleSource');
+  const mainEl=document.getElementById('main'), vgutter=document.getElementById('vgutter'), hgutter=document.getElementById('hgutter');
+  function relayout(){
+    const rightOn=showPreview||showSource;
+    const mobile=window.matchMedia('(max-width:768px)').matches;
+    previewSec.style.display=showPreview?'flex':'none'; sourceSec.style.display=showSource?'flex':'none';
+    rightCol.style.display=rightOn?'flex':'none';
+    vgutter.style.display=(rightOn&&!mobile)?'block':'none';
+    hgutter.style.display=(showPreview&&showSource)?'block':'none';
+    pBtn.classList.toggle('on',showPreview); sBtn.classList.toggle('on',showSource);
+  }
+  pBtn.addEventListener('click', function(){ showPreview=!showPreview; relayout(); });
+  sBtn.addEventListener('click', function(){ showSource=!showSource; relayout(); });
+
+  // 可拖曳分隔條：左右 + 上下
+  function startDrag(axis){ return function(e){ e.preventDefault(); document.body.style.userSelect='none'; document.body.style.cursor=axis==='x'?'col-resize':'row-resize';
+    function move(ev){
+      if(axis==='x'){ const r=mainEl.getBoundingClientRect(); let p=(ev.clientX-r.left)/r.width*100; p=Math.max(15,Math.min(85,p)); leftCol.style.flex='0 0 '+p+'%'; rightCol.style.flex='1 1 auto'; }
+      else { const r=rightCol.getBoundingClientRect(); let p=(ev.clientY-r.top)/r.height*100; p=Math.max(15,Math.min(85,p)); previewSec.style.flex='0 0 '+p+'%'; sourceSec.style.flex='1 1 auto'; }
+    }
+    function up(){ document.removeEventListener('pointermove',move); document.removeEventListener('pointerup',up); document.body.style.userSelect=''; document.body.style.cursor=''; }
+    document.addEventListener('pointermove',move); document.addEventListener('pointerup',up);
+  }; }
+  vgutter.addEventListener('pointerdown', startDrag('x'));
+  hgutter.addEventListener('pointerdown', startDrag('y'));
+
+  // 懸浮小視窗
+  function closeAllPops(){ document.querySelectorAll('.pop.open').forEach(function(p){ p.classList.remove('open'); }); }
+  function vpW(){ return window.innerWidth||document.documentElement.clientWidth||99999; }
+  function vpH(){ return window.innerHeight||document.documentElement.clientHeight||99999; }
+  function positionPop(pop,tr){ const r=tr.getBoundingClientRect();
+    pop.style.left=Math.max(6,Math.min(r.left, vpW()-pop.offsetWidth-8))+'px';
+    pop.style.top=(r.bottom+4)+'px'; }
+  document.querySelectorAll('[data-pop]').forEach(function(tr){
+    tr.addEventListener('click', function(e){ e.stopPropagation(); saveSel();
+      const pop=document.getElementById(tr.dataset.pop);
+      if(pop.classList.contains('open')){ pop.classList.remove('open'); }
+      else { pop.classList.add('open'); positionPop(pop,tr); } });
+  });
+  // 浮動面板：標題列可拖動、× 關閉
+  document.querySelectorAll('.pop').forEach(function(pop){
+    const head=pop.querySelector('.pop-head');
+    if(head) head.addEventListener('pointerdown', function(e){
+      if(e.target.classList.contains('pop-x')) return;
+      e.preventDefault(); const r=pop.getBoundingClientRect(); const ox=e.clientX-r.left, oy=e.clientY-r.top;
+      document.body.style.userSelect='none';
+      function move(ev){
+        pop.style.left=Math.max(0,Math.min(vpW()-pop.offsetWidth, ev.clientX-ox))+'px';
+        pop.style.top =Math.max(0,Math.min(vpH()-pop.offsetHeight, ev.clientY-oy))+'px';
+      }
+      function up(){ document.removeEventListener('pointermove',move); document.removeEventListener('pointerup',up); document.body.style.userSelect=''; }
+      document.addEventListener('pointermove',move); document.addEventListener('pointerup',up);
+    });
+    const x=pop.querySelector('.pop-x');
+    if(x) x.addEventListener('click', function(){ pop.classList.remove('open'); });
+  });
+
+  document.getElementById('toggleDark').addEventListener('click', function(){
+    const dark=document.documentElement.getAttribute('data-theme')==='dark';
+    document.documentElement.setAttribute('data-theme', dark?'light':'dark');
+    this.classList.toggle('on', !dark); try{ localStorage.setItem('notepad_theme', dark?'light':'dark'); }catch(e){}
+  });
+  const app=document.getElementById('app');
+  function enterFocus(){ app.classList.add('focus'); } function exitFocus(){ app.classList.remove('focus'); }
+  document.getElementById('focusBtn').addEventListener('click', enterFocus);
+  document.getElementById('focusExit').addEventListener('click', exitFocus);
+
+  /* ---------- 尋找/取代 ---------- */
+  const findPanel=document.getElementById('findPanel');
+  function openFind(){ findPanel.classList.add('open'); document.getElementById('findText').focus(); }
+  function closeFind(){ findPanel.classList.remove('open'); }
+  document.getElementById('find').addEventListener('click', openFind);
+  document.getElementById('findClose').addEventListener('click', closeFind);
+  document.getElementById('findNext').addEventListener('click', function(){ const t=document.getElementById('findText').value; if(t) window.find(t); });
+  document.getElementById('replOne').addEventListener('click', function(){
+    const t=document.getElementById('findText').value, r=document.getElementById('replText').value; if(!t) return;
+    const sel=window.getSelection();
+    if(sel && sel.toString().toLowerCase()===t.toLowerCase()){ document.execCommand('insertText',false,r); sync(); persist(); }
+    window.find(t);
+  });
+  document.getElementById('replAll').addEventListener('click', function(){
+    const t=document.getElementById('findText').value, r=document.getElementById('replText').value; if(!t) return;
+    const walker=document.createTreeWalker(editor, NodeFilter.SHOW_TEXT, null); const nodes=[]; while(walker.nextNode()) nodes.push(walker.currentNode);
+    let n=0; const re=new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g');
+    nodes.forEach(function(node){ if(re.test(node.textContent)){ node.textContent=node.textContent.replace(re,function(){ n++; return r; }); } });
+    sync(); persist(); alert('已取代 '+n+' 處');
+  });
+  document.addEventListener('keydown', function(e){
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='f'){ e.preventDefault(); openFind(); }
+    if(e.key==='Escape'){ exitFocus(); closeFind(); closeAllPops(); }
+  });
+
+  /* ---------- 啟動 ---------- */
+  try{ const th=localStorage.getItem('notepad_theme'); if(th==='dark'){ document.documentElement.setAttribute('data-theme','dark'); document.getElementById('toggleDark').classList.add('on'); } }catch(e){}
+  try{ docs=JSON.parse(localStorage.getItem(DKEY))||[]; activeId=localStorage.getItem(AKEY); }catch(e){ docs=[]; }
+  if(!docs.length){ docs=[{id:genId(),name:'未命名.html',html:CHEAT}]; activeId=docs[0].id; }
+  if(!docs.find(d=>d.id===activeId)) activeId=docs[0].id;
+  loadActive();
+})();
+</script>
