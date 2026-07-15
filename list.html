@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>editnote 網頁清單</title>
+<style>
+  *{ box-sizing:border-box; }
+  :root{ --bg:#f4f5f7; --panel:#fff; --border:#d9dce1; --ink:#1f2328; --muted:#6b7280; --accent:#2563eb; --hover:#eef2ff; }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#1a1b1e; --panel:#26282c; --border:#3a3d43; --ink:#e6e6e6; --muted:#9aa0a6; --accent:#60a5fa; --hover:#31343a; }
+  }
+  html,body{ margin:0; min-height:100%; background:var(--bg); color:var(--ink);
+    font-family:"Microsoft JhengHei","Segoe UI",system-ui,sans-serif; }
+  .wrap{ max-width:720px; margin:0 auto; padding:24px 18px 60px; }
+  header{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:6px; }
+  h1{ font-size:20px; margin:0; }
+  .sub{ color:var(--muted); font-size:13px; margin:2px 0 18px; }
+  .bar{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  a.btn, button.btn{ display:inline-flex; align-items:center; gap:5px; text-decoration:none;
+    border:1px solid var(--border); background:var(--panel); color:var(--ink);
+    padding:8px 13px; border-radius:8px; font-size:13.5px; cursor:pointer; }
+  a.btn:hover, button.btn:hover{ background:var(--hover); border-color:var(--accent); }
+  a.btn.primary{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  ul{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+  li{ background:var(--panel); border:1px solid var(--border); border-radius:10px; }
+  li a.page{ display:flex; align-items:center; justify-content:space-between; gap:10px;
+    text-decoration:none; color:var(--ink); padding:14px 16px; }
+  li a.page:hover{ background:var(--hover); }
+  .name{ font-size:15px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .url{ color:var(--muted); font-size:12px; margin-top:3px; }
+  .go{ color:var(--accent); font-size:13px; flex:0 0 auto; }
+  .state{ color:var(--muted); padding:30px 10px; text-align:center; font-size:14px; }
+  .err{ color:#e11d48; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>📄 網頁清單</h1>
+    <span id="count" class="go"></span>
+  </header>
+  <p class="sub">這裡列出已發佈到 editnote.pages.dev/pages/ 底下的所有網頁。</p>
+  <div class="bar">
+    <a class="btn primary" href="/">＋ 開新網頁（回編輯器）</a>
+    <button class="btn" id="refresh">↻ 重新整理</button>
+  </div>
+  <ul id="listEl"></ul>
+  <div id="state" class="state">讀取中…</div>
+</div>
+
+<script>
+(function(){
+  const API='https://api.github.com/repos/apply-git/editnote/contents/pages';
+  const SITE='https://editnote.pages.dev';
+  const listEl=document.getElementById('listEl');
+  const stateEl=document.getElementById('state');
+  const countEl=document.getElementById('count');
+
+  async function load(){
+    listEl.innerHTML=''; countEl.textContent=''; stateEl.style.display='block';
+    stateEl.className='state'; stateEl.textContent='讀取中…';
+    try{
+      const r=await fetch(API,{ headers:{'Accept':'application/vnd.github+json'}, cache:'no-store' });
+      if(!r.ok) throw new Error('GitHub 回應 '+r.status);
+      const files=await r.json();
+      const pages=files
+        .filter(f=>f.type==='file' && /\.html?$/i.test(f.name))
+        .map(f=>f.name.replace(/\.html?$/i,''))
+        .sort((a,b)=>a.localeCompare(b));
+      if(!pages.length){ stateEl.textContent='還沒有發佈任何網頁。回編輯器做一個吧！'; return; }
+      stateEl.style.display='none';
+      countEl.textContent='共 '+pages.length+' 頁';
+      pages.forEach(function(name){
+        const li=document.createElement('li');
+        const a=document.createElement('a'); a.className='page'; a.href=SITE+'/pages/'+name; a.target='_blank';
+        const left=document.createElement('div');
+        const nm=document.createElement('div'); nm.className='name'; nm.textContent=name;
+        const url=document.createElement('div'); url.className='url'; url.textContent='editnote.pages.dev/pages/'+name;
+        left.appendChild(nm); left.appendChild(url);
+        const go=document.createElement('span'); go.className='go'; go.textContent='開啟 ↗';
+        a.appendChild(left); a.appendChild(go); li.appendChild(a); listEl.appendChild(li);
+      });
+    }catch(e){
+      stateEl.className='state err'; stateEl.textContent='讀取失敗：'+e.message+'（GitHub API 每小時有次數限制，稍後再試）';
+    }
+  }
+  document.getElementById('refresh').addEventListener('click', load);
+  load();
+})();
+</script>
+</body>
+</html>
