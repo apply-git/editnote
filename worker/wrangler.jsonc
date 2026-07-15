@@ -1,0 +1,9 @@
+{
+  // editnote 發佈後端。部署：在此資料夾執行 npx wrangler@3 deploy
+  // 機密用指令設定，不要寫在這個檔：
+  //   npx wrangler@3 secret put GITHUB_TOKEN
+  //   npx wrangler@3 secret put PUBLISH_PASSWORD
+  "name": "editnote-api",
+  "main": "worker.js",
+  "compatibility_date": "2025-06-01"
+}

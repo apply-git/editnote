@@ -211,7 +211,8 @@
     <button id="saveAs" title="另存新檔（自訂檔名）">💾 另存新檔</button>
     <button id="expMd" title="匯出 Markdown (.md)">⬇ 匯出 MD</button>
     <button id="expPdf" title="列印 / 匯出 PDF">🖨 列印 / PDF</button>
-    <button id="pub" title="一鍵存成 index.html 到你選的發佈資料夾">📤 發佈到資料夾</button>
+    <button id="pubWeb" class="primary" title="發佈到網路（editnote.pages.dev/pages/…，手機也能用）">🌐 發佈到網路</button>
+    <button id="pub" title="一鍵存成 index.html 到你選的發佈資料夾">📤 存到資料夾</button>
     <button id="pubDir" title="換一個發佈資料夾（開新網頁專案）">📁 換發佈資料夾</button>
   </div>
   <div class="pop grid" id="popView">
@@ -515,7 +516,32 @@
   });
   document.getElementById('pubDir').addEventListener('click', function(){
     pubDirHandle=null;
-    alert('已重設。下次按「📤 發佈」會請你選一個新資料夾，等於開一個新的網頁專案（資料夾名＝專案名，建議用英文小寫）。');
+    alert('已重設。下次按「📤 存到資料夾」會請你選一個新資料夾，等於開一個新的網頁專案（資料夾名＝專案名，建議用英文小寫）。');
+  });
+
+  /* ---------- 發佈到網路：編輯器 → Worker → GitHub → Cloudflare Pages ---------- */
+  const PUB_API='https://editnote-api.cthouse-lee.workers.dev';
+  const PWKEY='editnote_pub_pw';
+  document.getElementById('pubWeb').addEventListener('click', async function(){
+    let base=currentName.replace(/\.html?$/i,''); if(base==='未命名') base='';
+    let fname=prompt('要發佈成什麼網頁名稱？（英文小寫較好）\n網址會是 editnote.pages.dev/pages/名稱.html', base);
+    if(fname===null) return; fname=fname.trim(); if(!fname){ alert('請輸入網頁名稱'); return; }
+    let pw=localStorage.getItem(PWKEY)||'';
+    if(!pw){ pw=prompt('發佈密碼：',''); if(pw===null) return; }
+    const btn=this, old=btn.textContent; btn.textContent='發佈中…'; btn.disabled=true;
+    try{
+      const res=await fetch(PUB_API,{ method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ filename:fname, html:fullDoc(fname), password:pw }) });
+      const data=await res.json();
+      if(data.ok){
+        localStorage.setItem(PWKEY,pw);
+        if(confirm('✅ 發佈成功！\n'+data.url+'\n\n（Cloudflare 部署約需 1 分鐘）\n要開啟看看嗎？')) window.open(data.url,'_blank');
+      } else {
+        if(res.status===401) localStorage.removeItem(PWKEY);
+        alert('❌ '+(data.error||'發佈失敗'));
+      }
+    }catch(e){ alert('❌ 連線失敗：'+e.message); }
+    finally{ btn.textContent=old; btn.disabled=false; }
   });
 
   // Markdown 匯出
