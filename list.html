@@ -23,8 +23,9 @@
   a.btn:hover, button.btn:hover{ background:var(--hover); border-color:var(--accent); }
   a.btn.primary{ background:var(--accent); border-color:var(--accent); color:#fff; }
   ul{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
-  li{ background:var(--panel); border:1px solid var(--border); border-radius:10px; }
-  li a.page{ display:flex; align-items:center; justify-content:space-between; gap:10px;
+  li{ background:var(--panel); border:1px solid var(--border); border-radius:10px;
+    display:flex; align-items:center; gap:6px; }
+  li a.page{ flex:1 1 auto; min-width:0; display:flex; align-items:center; justify-content:space-between; gap:10px;
     text-decoration:none; color:var(--ink); padding:14px 16px; }
   li a.page:hover{ background:var(--hover); }
   .name{ font-size:15px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -32,6 +33,10 @@
   .go{ color:var(--accent); font-size:13px; flex:0 0 auto; }
   .state{ color:var(--muted); padding:30px 10px; text-align:center; font-size:14px; }
   .err{ color:#e11d48; }
+  .delBtn{ flex:0 0 auto; margin-right:12px; border:1px solid var(--border); background:var(--panel); color:#e11d48;
+    padding:6px 10px; border-radius:7px; font-size:12.5px; cursor:pointer; }
+  .delBtn:hover{ background:#fee2e2; border-color:#e11d48; }
+  .delBtn:disabled{ opacity:.5; cursor:default; }
 </style>
 </head>
 <body>
@@ -53,9 +58,43 @@
 (function(){
   const API='https://api.github.com/repos/apply-git/editnote/contents/pages';
   const SITE='https://editnote.pages.dev';
+  const PUB_API='https://editnote-api.cthouse-lee.workers.dev';
+  const PWKEY='editnote_pub_pw';
   const listEl=document.getElementById('listEl');
   const stateEl=document.getElementById('state');
   const countEl=document.getElementById('count');
+
+  function updateCount(){
+    const n=listEl.children.length;
+    countEl.textContent = n ? ('共 '+n+' 頁') : '';
+    if(!n){ stateEl.style.display='block'; stateEl.className='state'; stateEl.textContent='還沒有發佈任何網頁。回編輯器做一個吧！'; }
+  }
+
+  async function deletePage(name, li, btn){
+    if(!confirm('確定要刪除「'+name+'」嗎？此動作無法復原。')) return;
+    if(!confirm('再次確認：真的要永久刪除「'+name+'」？')) return;
+    let pw=localStorage.getItem(PWKEY)||'';
+    if(!pw){ pw=prompt('發佈密碼：',''); if(pw===null) return; }
+    const oldText=btn.textContent; btn.textContent='刪除中…'; btn.disabled=true;
+    try{
+      const r=await fetch(PUB_API,{ method:'DELETE', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ filename:name+'.html', password:pw }) });
+      const data=await r.json().catch(()=>({}));
+      if(r.ok && data.ok){
+        localStorage.setItem(PWKEY,pw);
+        li.remove();
+        updateCount();
+        alert('✅ 已刪除「'+name+'」。\n（Cloudflare Pages 部署需一兩分鐘生效，稍後重新整理即可看到變化。）');
+      } else {
+        if(r.status===401) localStorage.removeItem(PWKEY);
+        alert('❌ 刪除失敗：'+(data.error||('HTTP '+r.status)));
+        btn.textContent=oldText; btn.disabled=false;
+      }
+    }catch(e){
+      alert('❌ 連線失敗：'+e.message);
+      btn.textContent=oldText; btn.disabled=false;
+    }
+  }
 
   async function load(){
     listEl.innerHTML=''; countEl.textContent=''; stateEl.style.display='block';
@@ -79,7 +118,12 @@
         const url=document.createElement('div'); url.className='url'; url.textContent='editnote.pages.dev/pages/'+name;
         left.appendChild(nm); left.appendChild(url);
         const go=document.createElement('span'); go.className='go'; go.textContent='開啟 ↗';
-        a.appendChild(left); a.appendChild(go); li.appendChild(a); listEl.appendChild(li);
+        a.appendChild(left); a.appendChild(go); li.appendChild(a);
+        const delBtn=document.createElement('button'); delBtn.className='delBtn'; delBtn.type='button';
+        delBtn.textContent='🗑 刪除'; delBtn.title='刪除這個已發佈的網頁';
+        delBtn.addEventListener('click', function(){ deletePage(name, li, delBtn); });
+        li.appendChild(delBtn);
+        listEl.appendChild(li);
       });
     }catch(e){
       stateEl.className='state err'; stateEl.textContent='讀取失敗：'+e.message+'（GitHub API 每小時有次數限制，稍後再試）';

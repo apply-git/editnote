@@ -18,7 +18,7 @@ function cors(origin) {
   const allow = ALLOWED.includes(origin) ? origin : ALLOWED[0];
   return {
     "Access-Control-Allow-Origin": allow,
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Methods": "POST, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "86400",
   };
@@ -39,8 +39,33 @@ export default {
   async fetch(request, env) {
     const origin = request.headers.get("Origin") || "";
     const h = cors(origin);
+    const url = new URL(request.url);
 
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: h });
+
+    // 刪除已發佈頁：DELETE（任何路徑）或 POST /delete，沿用發佈同一把密碼驗證
+    if (request.method === "DELETE" || (request.method === "POST" && url.pathname === "/delete")) {
+      let dbody;
+      try { dbody = await request.json(); } catch { return json({ error: "資料格式錯誤" }, 400, h); }
+
+      const { filename, password } = dbody || {};
+
+      if (!env.PUBLISH_PASSWORD || password !== env.PUBLISH_PASSWORD)
+        return json({ error: "密碼錯誤" }, 401, h);
+
+      const dsafe = sanitize(filename);
+      const dpath = `pages/${dsafe}`;
+
+      try {
+        const sha = await getSha(env, dpath);
+        if (!sha) return json({ error: "找不到該網頁：" + dsafe }, 404, h);
+        await deleteFile(env, dpath, sha);
+        return json({ ok: true, filename: dsafe }, 200, h);
+      } catch (e) {
+        return json({ error: "刪除失敗：" + e.message }, 500, h);
+      }
+    }
+
     if (request.method !== "POST") return json({ error: "只接受 POST" }, 405, h);
 
     let body;
@@ -92,6 +117,15 @@ async function putFile(env, path, content, sha) {
   if (sha) body.sha = sha;
   const r = await fetch(`${GH}/repos/${OWNER}/${REPO}/contents/${encodeURIComponent(path).replace(/%2F/g, "/")}`, {
     method: "PUT", headers: ghHeaders(env), body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(r.status + " " + (await r.text()).slice(0, 200));
+  return r.json();
+}
+
+async function deleteFile(env, path, sha) {
+  const body = { message: `Delete ${path}`, sha, branch: BRANCH };
+  const r = await fetch(`${GH}/repos/${OWNER}/${REPO}/contents/${encodeURIComponent(path).replace(/%2F/g, "/")}`, {
+    method: "DELETE", headers: ghHeaders(env), body: JSON.stringify(body),
   });
   if (!r.ok) throw new Error(r.status + " " + (await r.text()).slice(0, 200));
   return r.json();
