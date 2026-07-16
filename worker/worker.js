@@ -18,7 +18,17 @@ function cors(origin) {
   const allow = ALLOWED.includes(origin) ? origin : ALLOWED[0];
   return {
     "Access-Control-Allow-Origin": allow,
-    "Access-Control-Allow-Methods": "POST, DELETE, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Max-Age": "86400",
+  };
+}
+
+// /view（POST，公開回報瀏覽數）專用 CORS：任何已發佈頁面的來源都要放行，不能只給白名單
+function corsPublic() {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "86400",
   };
@@ -41,7 +51,47 @@ export default {
     const h = cors(origin);
     const url = new URL(request.url);
 
+    // /view 與 /unlock 的 OPTIONS 預檢要用公開版 CORS（任意來源），不能被白名單擋掉
+    if (request.method === "OPTIONS" && (url.pathname === "/view" || url.pathname === "/unlock")) return new Response(null, { status: 204, headers: corsPublic() });
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: h });
+
+    // 瀏覽數：公開頁面載入時自己回報一次，任何來源都能打（零信任但不需密碼，只做基本檔名消毒防濫用）
+    if (request.method === "POST" && url.pathname === "/view") {
+      const hPub = corsPublic();
+      let vbody;
+      try { vbody = await request.json(); } catch { return json({ error: "資料格式錯誤" }, 400, hPub); }
+
+      const vsafe = sanitize(vbody && vbody.filename);
+      const vkey = "views:" + vsafe;
+
+      try {
+        const cur = parseInt(await env.EDITNOTE_KV.get(vkey)) || 0;
+        const next = cur + 1;
+        await env.EDITNOTE_KV.put(vkey, String(next));
+        return json({ ok: true, count: next }, 200, hPub);
+      } catch (e) {
+        return json({ error: "記錄瀏覽數失敗：" + e.message }, 500, hPub);
+      }
+    }
+
+    // 瀏覽數：作者在編輯器內查詢目前次數，需要密碼保護
+    if (request.method === "GET" && url.pathname === "/view") {
+      const filename = url.searchParams.get("filename") || "";
+      const password = url.searchParams.get("password") || "";
+
+      if (!env.PUBLISH_PASSWORD || password !== env.PUBLISH_PASSWORD)
+        return json({ error: "密碼錯誤" }, 401, h);
+
+      const vsafe = sanitize(filename);
+      const vkey = "views:" + vsafe;
+
+      try {
+        const cur = parseInt(await env.EDITNOTE_KV.get(vkey)) || 0;
+        return json({ ok: true, count: cur }, 200, h);
+      } catch (e) {
+        return json({ error: "讀取瀏覽數失敗：" + e.message }, 500, h);
+      }
+    }
 
     // 刪除已發佈頁：DELETE（任何路徑）或 POST /delete，沿用發佈同一把密碼驗證
     if (request.method === "DELETE" || (request.method === "POST" && url.pathname === "/delete")) {
@@ -63,6 +113,169 @@ export default {
         return json({ ok: true, filename: dsafe }, 200, h);
       } catch (e) {
         return json({ error: "刪除失敗：" + e.message }, 500, h);
+      }
+    }
+
+    // 版本記錄：列出某已發佈頁在 GitHub 上的 commit 歷史（最近 20 筆）
+    if (request.method === "GET" && url.pathname === "/history") {
+      const filename = url.searchParams.get("filename") || "";
+      const password = url.searchParams.get("password") || "";
+
+      if (!env.PUBLISH_PASSWORD || password !== env.PUBLISH_PASSWORD)
+        return json({ error: "密碼錯誤" }, 401, h);
+
+      const hsafe = sanitize(filename);
+      const hpath = `pages/${hsafe}`;
+
+      try {
+        const history = await getHistory(env, hpath);
+        return json({ ok: true, history }, 200, h);
+      } catch (e) {
+        return json({ error: "讀取版本記錄失敗：" + e.message }, 500, h);
+      }
+    }
+
+    // 版本記錄：取回某一次 commit 當下的檔案內容，供預覽／復原使用
+    if (request.method === "GET" && url.pathname === "/history-content") {
+      const filename = url.searchParams.get("filename") || "";
+      const sha = url.searchParams.get("sha") || "";
+      const password = url.searchParams.get("password") || "";
+
+      if (!env.PUBLISH_PASSWORD || password !== env.PUBLISH_PASSWORD)
+        return json({ error: "密碼錯誤" }, 401, h);
+      if (!sha) return json({ error: "缺少版本 sha" }, 400, h);
+
+      const csafe = sanitize(filename);
+      const cpath = `pages/${csafe}`;
+
+      try {
+        const content = await getContentAt(env, cpath, sha);
+        return json({ ok: true, content, sha }, 200, h);
+      } catch (e) {
+        return json({ error: "讀取該版本內容失敗：" + e.message }, 500, h);
+      }
+    }
+
+    // 受保護頁面發佈：真實內容只存進私有 KV，GitHub public repo 只 commit 一個純密碼表單的樁頁面
+    // 這樣就算有人直接翻 GitHub repo 或用 raw.githubusercontent.com，也看不到真實內容
+    if (request.method === "POST" && url.pathname === "/publish-protected") {
+      let pbody;
+      try { pbody = await request.json(); } catch { return json({ error: "資料格式錯誤" }, 400, h); }
+
+      const { filename, html, pagePassword, password } = pbody || {};
+
+      if (!env.PUBLISH_PASSWORD || password !== env.PUBLISH_PASSWORD)
+        return json({ error: "密碼錯誤" }, 401, h);
+      if (typeof html !== "string" || !html.trim())
+        return json({ error: "沒有內容可發佈" }, 400, h);
+      if (typeof pagePassword !== "string" || !pagePassword)
+        return json({ error: "受保護頁面必須設定頁面密碼" }, 400, h);
+
+      // sanitize() 一律正規化成「安全字元 + .html」，不管傳進來時有沒有副檔名，
+      // 這裡跟 /unlock 都要各自呼叫 sanitize() 才能保證組出來的 KV key 完全一致
+      const psafe = sanitize(filename);
+      const pkey = "protected:" + psafe;
+      const ppath = `pages/${psafe}`;
+
+      try {
+        const passwordHash = await hashPassword(pagePassword);
+        await env.EDITNOTE_KV.put(pkey, JSON.stringify({ html, passwordHash, updatedAt: Date.now() }));
+
+        const slug = psafe.replace(/\.html?$/i, "");
+        const stub = protectedStubHtml(slug);
+        const sha = await getSha(env, ppath);
+        await putFile(env, ppath, stub, sha);
+
+        return json({ ok: true, url: `${SITE}/pages/${psafe}`, filename: psafe }, 200, h);
+      } catch (e) {
+        return json({ error: "發佈失敗：" + e.message }, 500, h);
+      }
+    }
+
+    // 訪客解鎖受保護頁面：不需要站台密碼，任何人都能呼叫，但要頁面密碼對才拿得到內容
+    if (request.method === "POST" && url.pathname === "/unlock") {
+      const hPub = corsPublic();
+      let ubody;
+      try { ubody = await request.json(); } catch { return json({ error: "資料格式錯誤" }, 400, hPub); }
+
+      const { slug, pagePassword } = ubody || {};
+
+      // slug 傳進來時通常不含副檔名，sanitize() 會正規化成跟 /publish-protected 存 KV 時一致的 key
+      const usafe = sanitize(slug);
+      const ukey = "protected:" + usafe;
+
+      try {
+        const raw = await env.EDITNOTE_KV.get(ukey);
+        if (!raw) return json({ error: "找不到此受保護頁面" }, 404, hPub);
+
+        const rec = JSON.parse(raw);
+        const hash = await hashPassword(pagePassword || "");
+        if (hash !== rec.passwordHash) return json({ error: "密碼錯誤" }, 401, hPub);
+
+        return json({ ok: true, html: rec.html }, 200, hPub);
+      } catch (e) {
+        return json({ error: "解鎖失敗：" + e.message }, 500, hPub);
+      }
+    }
+
+    // AI 助手：潤稿／續寫／改語氣／翻譯／摘要，會呼叫 Claude API 花錢，一定要密碼保護，不能讓陌生人濫用
+    if (request.method === "POST" && url.pathname === "/ai") {
+      let abody;
+      try { abody = await request.json(); } catch { return json({ error: "資料格式錯誤" }, 400, h); }
+
+      const { text, action, password, extra } = abody || {};
+
+      if (!env.PUBLISH_PASSWORD || password !== env.PUBLISH_PASSWORD)
+        return json({ error: "密碼錯誤" }, 401, h);
+
+      if (typeof text !== "string" || !text.trim())
+        return json({ error: "沒有內容可處理" }, 400, h);
+      // 成本與延遲控制：選取內容太長就直接擋掉，不送去 Claude API
+      if (text.length > 4000)
+        return json({ error: "內容太長，請選取少一點文字再試（上限 4000 字）" }, 400, h);
+
+      const AI_ACTIONS = ["proofread", "continue", "tone", "translate", "summarize"];
+      if (!AI_ACTIONS.includes(action))
+        return json({ error: "不支援的操作類型" }, 400, h);
+      if (action === "tone" && (typeof extra !== "string" || !extra.trim()))
+        return json({ error: "請提供目標語氣" }, 400, h);
+      if (action === "translate" && (typeof extra !== "string" || !extra.trim()))
+        return json({ error: "請提供目標語言" }, 400, h);
+
+      // ANTHROPIC_API_KEY 是 Worker Secret，使用者要自己另外用 wrangler secret put 設定；還沒設定時不能讓 Worker 丟未捕捉例外
+      if (!env.ANTHROPIC_API_KEY)
+        return json({ error: "AI 功能尚未設定完成，請聯繫管理者設定 ANTHROPIC_API_KEY" }, 503, h);
+
+      const aiPrompt = buildAiPrompt(action, text, extra);
+
+      try {
+        const ar = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": env.ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 1024,
+            messages: [{ role: "user", content: aiPrompt }],
+          }),
+        });
+
+        if (!ar.ok) {
+          const errText = (await ar.text()).slice(0, 300);
+          return json({ error: "AI 服務錯誤：" + errText }, 502, h);
+        }
+
+        const adata = await ar.json();
+        const result = adata && adata.content && adata.content[0] && adata.content[0].text;
+        if (typeof result !== "string")
+          return json({ error: "AI 服務錯誤：回應格式不正確" }, 502, h);
+
+        return json({ ok: true, result }, 200, h);
+      } catch (e) {
+        return json({ error: "AI 服務連線失敗：" + e.message }, 502, h);
       }
     }
 
@@ -93,6 +306,19 @@ export default {
 
 function json(obj, status, h) {
   return new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json", ...h } });
+}
+
+// AI 助手：依 action 組出送給 Claude 的 prompt，五種動作各自固定模板
+function buildAiPrompt(action, text, extra) {
+  if (action === "proofread")
+    return "請幫我潤飾以下文字，修正錯字、語病、標點，但保留原意與語氣，只回傳修改後的文字，不要加任何說明或前後綴：\n\n" + text;
+  if (action === "continue")
+    return "請接續以下文字，用同樣的語氣和風格繼續寫下去，大約 100-200 字，只回傳新增的接續內容，不要重複原文，不要加任何說明：\n\n" + text;
+  if (action === "tone")
+    return "請把以下文字改寫成「" + extra + "」的語氣，保留原意，只回傳改寫後的文字，不要加任何說明：\n\n" + text;
+  if (action === "translate")
+    return "請把以下文字翻譯成" + extra + "，只回傳翻譯結果，不要加任何說明：\n\n" + text;
+  return "請用 2-3 句話摘要以下文字重點，只回傳摘要內容，不要加任何說明：\n\n" + text;
 }
 
 const GH = "https://api.github.com";
@@ -137,4 +363,127 @@ function b64(str) {
   let bin = "";
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin);
+}
+
+// UTF-8 安全 base64 解碼（反向對應 b64，中文不會壞）
+function ub64(b64str) {
+  const bin = atob((b64str || "").replace(/\s+/g, ""));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder("utf-8").decode(bytes);
+}
+
+// 頁面密碼雜湊：純密碼雜湊（不加 salt，輕量級個人工具用），SHA-256 轉 hex 字串方便存 KV
+async function hashPassword(pw) {
+  const data = new TextEncoder().encode(pw);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest)).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+}
+
+// 受保護頁面的樁頁面（stub）：commit 到 public repo 的 pages/{slug}.html 只放這個，不含真實內容
+// 純 HTML + inline CSS + inline script，不用外部資源；深色模式跟響應式都靠 CSS media query 處理
+function protectedStubHtml(slug) {
+  const workerUrl = "https://editnote-api.cthouse-lee.workers.dev";
+  const slugJson = JSON.stringify(slug);
+  const apiJson = JSON.stringify(workerUrl + "/unlock");
+  let html = "";
+  html += "<!doctype html>\n";
+  html += "<html lang=\"zh-Hant\">\n";
+  html += "<head>\n";
+  html += "<meta charset=\"utf-8\">\n";
+  html += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n";
+  html += "<title>此頁面需要密碼</title>\n";
+  html += "<style>\n";
+  html += ":root{color-scheme:light dark;}\n";
+  html += "*{box-sizing:border-box;}\n";
+  html += "body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;font-family:\"Microsoft JhengHei\",\"Segoe UI\",system-ui,sans-serif;background:#f3f4f6;color:#1f2937;}\n";
+  html += ".card{width:100%;max-width:360px;background:#ffffff;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.12);padding:28px 24px;text-align:center;}\n";
+  html += ".icon{font-size:40px;margin-bottom:10px;}\n";
+  html += "h1{font-size:17px;margin:0 0 6px;}\n";
+  html += "p.desc{font-size:13px;color:#6b7280;margin:0 0 18px;}\n";
+  html += "input[type=password]{width:100%;padding:10px 12px;font-size:15px;border:1px solid #d1d5db;border-radius:8px;margin-bottom:10px;}\n";
+  html += "button{width:100%;padding:10px 12px;font-size:15px;border:none;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer;}\n";
+  html += "button:disabled{opacity:.6;cursor:default;}\n";
+  html += ".err{color:#dc2626;font-size:12.5px;margin-top:8px;min-height:16px;}\n";
+  html += "@media (prefers-color-scheme:dark){\n";
+  html += "body{background:#111827;color:#e5e7eb;}\n";
+  html += ".card{background:#1f2937;box-shadow:0 8px 30px rgba(0,0,0,.5);}\n";
+  html += "p.desc{color:#9ca3af;}\n";
+  html += "input[type=password]{background:#111827;border-color:#374151;color:#e5e7eb;}\n";
+  html += "}\n";
+  html += "</style>\n";
+  html += "</head>\n";
+  html += "<body>\n";
+  html += "<div class=\"card\">\n";
+  html += "<div class=\"icon\">\u{1F512}</div>\n";
+  html += "<h1>此頁面需要密碼才能檢視</h1>\n";
+  html += "<p class=\"desc\">請輸入密碼以繼續</p>\n";
+  html += "<input type=\"password\" id=\"pw\" placeholder=\"請輸入密碼\" autofocus>\n";
+  html += "<button id=\"go\">送出</button>\n";
+  html += "<div class=\"err\" id=\"err\"></div>\n";
+  html += "</div>\n";
+  html += "<script>\n";
+  html += "(function(){\n";
+  html += "var slug = " + slugJson + ";\n";
+  html += "var api = " + apiJson + ";\n";
+  html += "var btn = document.getElementById(\"go\");\n";
+  html += "var pwEl = document.getElementById(\"pw\");\n";
+  html += "var errEl = document.getElementById(\"err\");\n";
+  html += "function submit(){\n";
+  html += "var pw = pwEl.value;\n";
+  html += "if(!pw){ errEl.textContent = \"請輸入密碼\"; return; }\n";
+  html += "btn.disabled = true; btn.textContent = \"驗證中…\"; errEl.textContent = \"\";\n";
+  html += "fetch(api, { method: \"POST\", headers: { \"Content-Type\": \"application/json\" }, body: JSON.stringify({ slug: slug, pagePassword: pw }) })\n";
+  html += ".then(function(r){ return r.json(); })\n";
+  html += ".then(function(data){\n";
+  html += "if(data && data.ok){\n";
+  html += "document.open(); document.write(data.html); document.close();\n";
+  html += "} else {\n";
+  html += "btn.disabled = false; btn.textContent = \"送出\";\n";
+  html += "errEl.textContent = (data && data.error) ? data.error : \"密碼錯誤\";\n";
+  html += "}\n";
+  html += "})\n";
+  html += ".catch(function(){\n";
+  html += "btn.disabled = false; btn.textContent = \"送出\";\n";
+  html += "errEl.textContent = \"連線失敗，請稍後再試\";\n";
+  html += "});\n";
+  html += "}\n";
+  html += "btn.addEventListener(\"click\", submit);\n";
+  html += "pwEl.addEventListener(\"keydown\", function(e){ if(e.key === \"Enter\") submit(); });\n";
+  html += "})();\n";
+  html += "</script>\n";
+  html += "</body>\n";
+  html += "</html>\n";
+  return html;
+}
+
+// 版本記錄：取某檔案的 commit 歷史（依 path 過濾），查不到就回空陣列，不當成錯誤
+async function getHistory(env, path) {
+  const q = `path=${encodeURIComponent(path)}&sha=${BRANCH}&per_page=20`;
+  const r = await fetch(`${GH}/repos/${OWNER}/${REPO}/commits?${q}`, { headers: ghHeaders(env) });
+  if (r.status === 404) return [];
+  if (!r.ok) throw new Error("GitHub 回應 " + r.status);
+  const list = await r.json();
+  if (!Array.isArray(list)) return [];
+  return list.map(function (c) {
+    const commit = c.commit || {};
+    const author = commit.author || {};
+    return {
+      sha: c.sha,
+      shortSha: (c.sha || "").slice(0, 7),
+      message: commit.message || "",
+      date: author.date || "",
+    };
+  });
+}
+
+// 版本記錄：取某次 commit 當下、Contents API 回傳的檔案內容（base64 解碼成 UTF-8 字串）
+async function getContentAt(env, path, sha) {
+  const encPath = encodeURIComponent(path).replace(/%2F/g, "/");
+  const r = await fetch(`${GH}/repos/${OWNER}/${REPO}/contents/${encPath}?ref=${encodeURIComponent(sha)}`, { headers: ghHeaders(env) });
+  if (r.status === 404) throw new Error("找不到該版本內容");
+  if (!r.ok) throw new Error("GitHub 回應 " + r.status);
+  const data = await r.json();
+  if (!data || typeof data.content !== "string") throw new Error("內容格式不正確");
+  return ub64(data.content);
 }

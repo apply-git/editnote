@@ -5,5 +5,8 @@
   //   npx wrangler@3 secret put PUBLISH_PASSWORD
   "name": "editnote-api",
   "main": "worker.js",
-  "compatibility_date": "2025-06-01"
+  "compatibility_date": "2025-06-01",
+  "kv_namespaces": [
+    { "binding": "EDITNOTE_KV", "id": "196e9d2eaed347e0a5d6bbef01605349" }
+  ]
 }

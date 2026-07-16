@@ -63,6 +63,7 @@
   .pop select{ padding:5px 6px; border:1px solid var(--border); border-radius:6px; font-size:12.5px; background:var(--btn); color:var(--ink); flex:0 0 auto; }
   .pop .swatches{ flex:0 0 auto; }
   .pop button.on{ background:#dbeafe; border-color:#93c5fd; color:#1e3a8a; }
+  .pop button.recording{ background:#fee2e2; border-color:#fca5a5; color:#b91c1c; }
   .pop .b{ font-weight:700; } .pop .i{ font-style:italic; }
   .pop .u{ text-decoration:underline; } .pop .s{ text-decoration:line-through; }
   /* 斜線指令選單 */
@@ -217,6 +218,7 @@
     <button data-cmd="removeFormat" id="clearFmt" title="清除格式">✕格式</button>
     <span class="swatches" id="forePalette"><span class="lead b">A</span></span>
     <span class="swatches" id="hilitePalette"><span class="lead">🖍</span></span>
+    <button id="aiAssistBtn" title="AI 潤稿／續寫／改語氣／翻譯／摘要（請先選取要處理的文字）">✨ AI 助手</button>
   </div>
   <div class="pop grid wide" id="popPara">
     <div class="pop-head">段落<button class="pop-x" title="關閉">×</button></div>
@@ -239,6 +241,7 @@
     <div class="pop-head">插入<button class="pop-x" title="關閉">×</button></div>
     <button id="insLink" title="插入連結">🔗 連結</button>
     <label class="filebtn" title="從電腦選圖片，內嵌並自動壓縮">🖼 圖片<input id="insImage" type="file" accept="image/*" hidden></label>
+    <label class="filebtn" title="用相機拍照插入（手機會開啟相機，電腦通常會直接開檔案選擇），自動壓縮">📷 拍照<input id="insCamera" type="file" accept="image/*" capture="environment" hidden></label>
     <button id="insTable" title="插入表格">▦ 插入表格</button>
     <button id="rowAdd" title="下方加一列">＋列</button>
     <button id="rowDel" title="刪這一列">－列</button>
@@ -250,6 +253,7 @@
     <button id="insTodo" title="插入可勾選待辦清單">☑ 待辦清單</button>
     <button id="insFold" title="插入可摺疊區塊">▸ 摺疊區塊</button>
     <button id="insEmbed" title="嵌入 YouTube 影片、Google 地圖或 .mp4/.webm 影片連結">🎬 嵌入</button>
+    <button id="insVoice" title="語音輸入（點擊開始錄音，再點一次或點別處停止，辨識文字會插入游標處）">🎤 語音輸入</button>
   </div>
   <div class="pop" id="popFile">
     <div class="pop-head">檔案<button class="pop-x" title="關閉">×</button></div>
@@ -318,7 +322,7 @@
   </div>
   <div class="pop wide" id="popPubSettings">
     <div class="pop-head">🎨 發佈設定<button class="pop-x" title="關閉">×</button></div>
-    <div style="width:230px;display:flex;flex-direction:column;gap:10px;">
+    <div style="width:230px;display:flex;flex-direction:column;gap:10px;max-height:min(480px,70vh);overflow-y:auto;overflow-x:hidden;padding-right:2px;">
       <div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">頁面圖示（favicon）</div>
         <div id="iconGrid" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
@@ -333,7 +337,34 @@
         <input id="ogImageInput" type="text" placeholder="https://…" style="width:100%;box-sizing:border-box;padding:5px 6px;border:1px solid var(--border);border-radius:6px;background:var(--btn);color:var(--ink);font-size:12.5px;">
       </div>
       <div id="pubNameInfo" style="font-size:11.5px;color:var(--muted);"></div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink);cursor:pointer;">
+        <input id="showViewCountToggle" type="checkbox" style="width:15px;height:15px;flex:0 0 auto;">
+        顯示瀏覽數（發佈頁右下角顯示 👁 徽章）
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink);cursor:pointer;">
+        <input id="protectedToggle" type="checkbox" style="width:15px;height:15px;flex:0 0 auto;">
+        🔒 密碼保護此頁（訪客要輸入密碼才能看到內容）
+      </label>
+      <div id="pagePasswordRow" style="display:none;">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">設定此頁密碼</div>
+        <input id="pagePasswordInput" type="password" placeholder="這一頁專屬的密碼" style="width:100%;box-sizing:border-box;padding:5px 6px;border:1px solid var(--border);border-radius:6px;background:var(--btn);color:var(--ink);font-size:12.5px;">
+      </div>
+      <button id="checkViewCount" title="查詢這個發佈頁目前累積的瀏覽次數" style="width:100%;justify-content:center;">👁 查看目前瀏覽數</button>
+      <div id="viewCountInfo" style="font-size:11.5px;color:var(--muted);"></div>
+      <button id="openHistory" title="查看這個發佈頁的歷史版本，可預覽或復原舊版" style="width:100%;justify-content:center;">📜 版本記錄</button>
     </div>
+  </div>
+  <div class="pop wide" id="popHistory">
+    <div class="pop-head">📜 版本記錄<button class="pop-x" title="關閉">×</button></div>
+    <div id="historyBody" style="width:250px;display:flex;flex-direction:column;gap:6px;max-height:320px;overflow:auto;"></div>
+  </div>
+  <div class="pop grid wide" id="popAiFloat">
+    <div class="pop-head">✨ AI 助手<button class="pop-x" title="關閉">×</button></div>
+    <button data-ai="proofread" title="潤稿：修正錯字、語病、標點，保留原意">✨ 潤稿</button>
+    <button data-ai="continue" title="接續：用同樣語氣繼續寫下去">➡️ 續寫</button>
+    <button data-ai="tone" title="改語氣：改寫成指定的語氣">🎭 改語氣</button>
+    <button data-ai="translate" title="翻譯：翻成指定的語言">🌐 翻譯</button>
+    <button data-ai="summarize" title="摘要：用 2-3 句話摘要重點">📝 摘要</button>
   </div>
   <div class="pop" id="popSlash"></div>
 
@@ -2762,7 +2793,8 @@ var qrcode = function() {
   function newTab(html,name,opts){
     opts=opts||{}; persist(); const id=genId();
     docs.push({ id:id, name:name||'未命名.html', html:html||'<p><br></p>',
-      icon:opts.icon||'📝', themeId:opts.themeId||'default', pubName:opts.pubName||'', ogImage:opts.ogImage||'' });
+      icon:opts.icon||'📝', themeId:opts.themeId||'default', pubName:opts.pubName||'', ogImage:opts.ogImage||'', showViewCount:!!opts.showViewCount,
+      protected:!!opts.protected, pagePassword:opts.pagePassword||'' });
     activeId=id; loadActive(); persist();
   }
 
@@ -2777,7 +2809,7 @@ var qrcode = function() {
   function closeTab(id){
     const i=docs.findIndex(d=>d.id===id); if(i<0) return;
     const doc=docs[i]; if(doc){ trashPush(doc.name, doc.id===activeId?editor.innerHTML:doc.html); }
-    if(docs.length===1){ docs[0]={id:genId(),name:'未命名.html',html:'<p><br></p>',icon:'📝',themeId:'default',pubName:'',ogImage:''}; activeId=docs[0].id; }
+    if(docs.length===1){ docs[0]={id:genId(),name:'未命名.html',html:'<p><br></p>',icon:'📝',themeId:'default',pubName:'',ogImage:'',showViewCount:false,protected:false,pagePassword:''}; activeId=docs[0].id; }
     else { const wasActive=(id===activeId); docs.splice(i,1); if(wasActive) activeId=docs[Math.max(0,i-1)].id; }
     loadActive(); persist();
   }
@@ -2870,6 +2902,7 @@ var qrcode = function() {
   }
   function insertImg(dataURL){ compress(dataURL,function(out){ editor.focus(); restoreSel(); document.execCommand('insertHTML',false,'<img src="'+out+'">'); sync(); persist(); saveSel(); }); }
   document.getElementById('insImage').addEventListener('change', function(){ const f=this.files[0]; if(!f) return; const rd=new FileReader(); rd.onload=function(){ insertImg(rd.result); }; rd.readAsDataURL(f); this.value=''; });
+  document.getElementById('insCamera').addEventListener('change', function(){ const f=this.files[0]; if(!f) return; const rd=new FileReader(); rd.onload=function(){ insertImg(rd.result); }; rd.readAsDataURL(f); this.value=''; });
 
   function cleanPasted(html){
     html=html.replace(/<!--[\s\S]*?-->/g,'').replace(/<\/?(o:p|xml|meta|link|style|script|title|head)[^>]*>/gi,'');
@@ -2927,6 +2960,72 @@ var qrcode = function() {
     const files=e.dataTransfer&&e.dataTransfer.files;
     if(files&&files.length){ e.preventDefault(); Array.prototype.forEach.call(files,function(f){ if(f.type.indexOf('image')===0){ const rd=new FileReader(); rd.onload=function(){ insertImg(rd.result); }; rd.readAsDataURL(f); } }); }
   });
+
+  /* ---------- 語音輸入（Web Speech API，辨識文字即時插入游標位置） ---------- */
+  (function(){
+    const voiceBtn=document.getElementById('insVoice');
+    const voiceBtnDefaultText=voiceBtn.textContent;
+    const voiceBtnDefaultTitle=voiceBtn.title;
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){
+      voiceBtn.addEventListener('click', function(){ alert('此瀏覽器不支援語音輸入，請改用電腦版 Chrome 或其他有支援語音辨識功能的瀏覽器'); });
+      return;
+    }
+    let recog=null, listening=false;
+    function stopVoice(){
+      if(recog && listening){ try{ recog.stop(); }catch(e){} }
+    }
+    function startVoice(){
+      editor.focus(); restoreSel(); saveSel();
+      recog=new SR();
+      recog.lang='zh-TW'; recog.continuous=true; recog.interimResults=true;
+      recog.onresult=function(ev){
+        for(let i=ev.resultIndex; i<ev.results.length; i++){
+          const res=ev.results[i];
+          if(!res.isFinal) continue;
+          const text=res[0].transcript;
+          if(!text) continue;
+          editor.focus(); restoreSel();
+          document.execCommand('insertText',false,text);
+          sync(); persist(); saveSel();
+        }
+      };
+      recog.onerror=function(ev){
+        if(ev.error==='not-allowed' || ev.error==='service-not-allowed'){
+          alert('無法使用語音輸入：請允許此網站使用麥克風權限');
+        } else if(ev.error==='audio-capture'){
+          alert('無法使用語音輸入：找不到麥克風裝置');
+        } else if(ev.error==='no-speech' || ev.error==='aborted'){
+          // 沒收到語音或使用者自行停止，不用跳出提示
+        } else {
+          alert('語音辨識發生錯誤，請稍後再試（'+ev.error+'）');
+        }
+      };
+      recog.onend=function(){
+        listening=false;
+        voiceBtn.textContent=voiceBtnDefaultText;
+        voiceBtn.title=voiceBtnDefaultTitle;
+        voiceBtn.classList.remove('recording');
+      };
+      try{
+        recog.start();
+        listening=true;
+        voiceBtn.textContent='🔴 錄音中';
+        voiceBtn.title='點擊停止語音輸入';
+        voiceBtn.classList.add('recording');
+      }catch(e){
+        listening=false;
+      }
+    }
+    voiceBtn.addEventListener('click', function(){
+      if(listening){ stopVoice(); } else { startVoice(); }
+    });
+    document.addEventListener('click', function(e){
+      if(listening && e.target!==voiceBtn) stopVoice();
+    });
+    // 讓 closeAllPops() 關面板時也能順便停止錄音（該函式的 stopPropagation 會讓上面的 document click 收不到）
+    window.__editnoteStopVoice=stopVoice;
+  })();
 
   /* ---------- 插入區塊：程式碼／提示框／警告框／待辦／摺疊 ---------- */
   function uid(){ return 'tmp'+Date.now()+Math.floor(Math.random()*100000); }
@@ -3216,6 +3315,35 @@ var qrcode = function() {
     const svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text x="50" y="58%" font-size="72" text-anchor="middle" dominant-baseline="middle">'+safe+'</text></svg>';
     return 'data:image/svg+xml,'+encodeURIComponent(svg);
   }
+  // 瀏覽數追蹤：只在此分頁已發佈過（doc.pubName 有值）時才注入，本機草稿/預覽不會被計數
+  // 一律都會回報計數；showBadge 只決定要不要在頁面右下角顯示 👁 徽章
+  function viewTrackScript(name, showBadge){
+    const fname=JSON.stringify(name);
+    const api=JSON.stringify(PUB_API+'/view');
+    let s='\n<script>(function(){\n';
+    s+='try{\n';
+    s+='fetch('+api+',{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:'+fname+'})})\n';
+    if(showBadge){
+      s+='.then(function(r){ return r.json(); })\n';
+      s+='.then(function(data){\n';
+      s+='if(data&&data.ok){\n';
+      s+='var b=document.getElementById("editnote-view-badge");\n';
+      s+='if(b){ b.textContent="👁 "+data.count; b.style.display="inline-block"; }\n';
+      s+='}\n';
+      s+='})\n';
+    }
+    s+='.catch(function(){});\n';
+    s+='}catch(e){}\n';
+    s+='})();<\/script>\n';
+    if(showBadge){
+      s+='<style>\n';
+      s+='#editnote-view-badge{position:fixed;right:14px;bottom:14px;z-index:2147483647;display:none;font-family:"Microsoft JhengHei","Segoe UI",system-ui,sans-serif;font-size:12px;line-height:1;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.72);color:#374151;box-shadow:0 1px 6px rgba(0,0,0,.14);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);pointer-events:none;}\n';
+      s+='@media (prefers-color-scheme:dark){#editnote-view-badge{background:rgba(32,33,36,.72);color:#e5e7eb;box-shadow:0 1px 6px rgba(0,0,0,.45);}}\n';
+      s+='</style>\n';
+      s+='<div id="editnote-view-badge"></div>\n';
+    }
+    return s;
+  }
   // 組完整發佈用 HTML；doc 提供 icon/themeId/ogImage 中繼資料，htmlContent/desc 另外傳入
   // （拆出來是給「匯出全部分頁」重用：非目前作用中分頁不能吃即時編輯區內容）
   function fullDocFrom(name, doc, htmlContent, desc){
@@ -3236,7 +3364,8 @@ var qrcode = function() {
     if(ad.ogImage) head+='<meta property="og:image" content="'+escHtml(ad.ogImage)+'">\n';
     head+='<meta name="twitter:card" content="summary">\n';
     head+='<style>\n'+PUB_CSS+(PUB_THEMES[themeId]?('\n'+PUB_THEMES[themeId]):'')+'\n</style>';
-    return '<!doctype html>\n<html lang="zh-Hant">\n<head>\n'+head+'\n</head>\n<body>\n'+htmlContent+'\n</body>\n</html>';
+    const trackHtml = ad.pubName ? viewTrackScript(name, !!ad.showViewCount) : '';
+    return '<!doctype html>\n<html lang="zh-Hant">\n<head>\n'+head+'\n</head>\n<body>\n'+htmlContent+trackHtml+'\n</body>\n</html>';
   }
   function fullDoc(name){
     return fullDocFrom(name, activeDoc(), editor.innerHTML, plainDescription());
@@ -3443,6 +3572,16 @@ var qrcode = function() {
   document.getElementById('ogImageInput').addEventListener('change', function(){
     const d=activeDoc(); if(!d) return; d.ogImage=this.value.trim(); persist();
   });
+  document.getElementById('showViewCountToggle').addEventListener('change', function(){
+    const d=activeDoc(); if(!d) return; d.showViewCount=this.checked; persist();
+  });
+  document.getElementById('protectedToggle').addEventListener('change', function(){
+    const d=activeDoc(); if(!d) return; d.protected=this.checked; persist();
+    document.getElementById('pagePasswordRow').style.display = this.checked ? 'block' : 'none';
+  });
+  document.getElementById('pagePasswordInput').addEventListener('change', function(){
+    const d=activeDoc(); if(!d) return; d.pagePassword=this.value; persist();
+  });
   function refreshPubSettingsPanel(){
     const d=activeDoc(); if(!d) return;
     document.querySelectorAll('#iconGrid button').forEach(function(b){ b.classList.toggle('on', b.dataset.emoji===d.icon); });
@@ -3450,6 +3589,11 @@ var qrcode = function() {
     document.getElementById('themeSelect').value = d.themeId||'default';
     document.getElementById('ogImageInput').value = d.ogImage||'';
     document.getElementById('pubNameInfo').textContent = '目前發佈頁名：' + (d.pubName ? d.pubName : '（尚未發佈，發佈時可設定）');
+    document.getElementById('showViewCountToggle').checked = !!d.showViewCount;
+    document.getElementById('protectedToggle').checked = !!d.protected;
+    document.getElementById('pagePasswordInput').value = d.pagePassword||'';
+    document.getElementById('pagePasswordRow').style.display = d.protected ? 'block' : 'none';
+    document.getElementById('viewCountInfo').textContent = '';
   }
   document.getElementById('openPubSettings').addEventListener('click', refreshPubSettingsPanel);
 
@@ -3562,11 +3706,19 @@ var qrcode = function() {
   }
 
   // 發佈成功結果面板：網址、複製連結、開啟、QR code
-  function showPubResult(url){
+  // isProtected 為 true 時多提醒一行，避免使用者分享網址卻忘了告訴對方密碼
+  function showPubResult(url, isProtected){
     const body=document.getElementById('pubResultBody'); body.innerHTML='';
     const urlBox=document.createElement('div');
     urlBox.style.cssText='font-size:12.5px;color:var(--ink);word-break:break-all;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 8px;';
     urlBox.textContent=url; body.appendChild(urlBox);
+
+    if(isProtected){
+      const note=document.createElement('div');
+      note.style.cssText='font-size:11.5px;color:var(--muted);';
+      note.textContent='🔒 這是密碼保護頁面，分享網址時記得也要告訴對方密碼';
+      body.appendChild(note);
+    }
 
     const copyBtn=document.createElement('button'); copyBtn.textContent='📋 複製連結';
     copyBtn.addEventListener('click', function(){ copyText(url,copyBtn); }); body.appendChild(copyBtn);
@@ -3588,6 +3740,12 @@ var qrcode = function() {
 
   document.getElementById('pubWeb').addEventListener('click', async function(){
     const ad0=activeDoc()||{};
+    const isProtected=!!ad0.protected;
+    if(isProtected && !ad0.pagePassword){
+      alert('請先在發佈設定裡設定這一頁的密碼');
+      document.getElementById('openPubSettings').click();
+      return;
+    }
     let base=ad0.pubName || currentName.replace(/\.html?$/i,''); if(base==='未命名') base='';
     let promptMsg='要發佈成什麼網頁名稱？（英文小寫較好）\n網址會是 editnote.pages.dev/pages/名稱.html';
     if(ad0.pubName) promptMsg+='\n（此分頁先前已發佈為「'+ad0.pubName+'」，預設會覆蓋同名頁面）';
@@ -3596,20 +3754,258 @@ var qrcode = function() {
     let pw=localStorage.getItem(PWKEY)||'';
     if(!pw){ pw=prompt('發佈密碼：',''); if(pw===null) return; }
     const btn=this, old=btn.textContent; btn.textContent='發佈中…'; btn.disabled=true;
+    // 先暫時把 pubName 設成這次要發佈的檔名，讓 fullDoc() 產生內容時瀏覽數追蹤 script 就能一起帶進去
+    // （不然第一次發佈時 pubName 還是空的，追蹤 script 不會被注入）；失敗的話要復原回原本的值
+    const prevPubName=ad0.pubName;
+    ad0.pubName=fname;
     try{
-      const res=await fetch(PUB_API,{ method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({ filename:fname, html:fullDoc(fname), password:pw }) });
+      const endpoint = isProtected ? (PUB_API+'/publish-protected') : PUB_API;
+      const payload = isProtected
+        ? { filename:fname, html:fullDoc(fname), pagePassword:ad0.pagePassword, password:pw }
+        : { filename:fname, html:fullDoc(fname), password:pw };
+      const res=await fetch(endpoint,{ method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload) });
       const data=await res.json();
       if(data.ok){
         localStorage.setItem(PWKEY,pw);
         const d=activeDoc(); if(d){ d.pubName=fname; persist(); }
-        showPubResult(data.url);
+        showPubResult(data.url, isProtected);
       } else {
+        ad0.pubName=prevPubName;
         if(res.status===401) localStorage.removeItem(PWKEY);
         alert('❌ '+(data.error||'發佈失敗'));
       }
-    }catch(e){ alert('❌ 連線失敗：'+e.message); }
+    }catch(e){ ad0.pubName=prevPubName; alert('❌ 連線失敗：'+e.message); }
     finally{ btn.textContent=old; btn.disabled=false; }
+  });
+
+  /* ---------- 版本記錄：列出 GitHub 上的 commit 歷史，可預覽或復原舊版 ---------- */
+  function historyMsgLabel(msg){
+    msg=(msg||'').trim();
+    if(/^Publish\s+pages\//i.test(msg)) return '發佈更新';
+    if(/^Delete\s+pages\//i.test(msg)) return '刪除頁面';
+    return msg || '（無說明）';
+  }
+  async function fetchHistoryContent(pubName, sha, pw){
+    const url=PUB_API+'/history-content?filename='+encodeURIComponent(pubName+'.html')+'&sha='+encodeURIComponent(sha)+'&password='+encodeURIComponent(pw);
+    const res=await fetch(url);
+    const data=await res.json();
+    if(!data.ok){
+      if(res.status===401) localStorage.removeItem(PWKEY);
+      throw new Error(data.error||'讀取失敗');
+    }
+    return data.content;
+  }
+  async function previewHistoryVersion(pubName, sha, pw){
+    const w=window.open('', '_blank');
+    if(w){ try{ w.document.write('<p style="font-family:sans-serif;padding:20px;color:#666;">載入中…</p>'); }catch(e){} }
+    try{
+      const content=await fetchHistoryContent(pubName, sha, pw);
+      if(w){ w.document.open(); w.document.write(content); w.document.close(); }
+      else alert('瀏覽器封鎖了新分頁，請允許彈出視窗後再試一次。');
+    }catch(e){
+      if(w){ w.document.open(); w.document.write('<p style="font-family:sans-serif;padding:20px;color:#b91c1c;">載入失敗：'+e.message+'</p>'); w.document.close(); }
+      else alert('❌ 預覽失敗：'+e.message);
+    }
+  }
+  async function restoreHistoryVersion(pubName, sha, pw){
+    if(!confirm('確定要把目前分頁復原成這個舊版本嗎？\n（復原後記得再按「🌐 發佈到網路」才會覆蓋線上版本）')) return;
+    try{
+      const content=await fetchHistoryContent(pubName, sha, pw);
+      const bm=content.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+      const body=bm?bm[1]:content;
+      editor.innerHTML=body;
+      sync(); persist();
+      closeAllPops();
+      alert('已復原到此版本，記得再按「🌐 發佈到網路」才會真正覆蓋線上版本。');
+    }catch(e){ alert('❌ 復原失敗：'+e.message); }
+  }
+  function renderHistoryList(list, pubName, pw){
+    const body=document.getElementById('historyBody'); body.innerHTML='';
+    if(!list.length){ body.innerHTML='<div style="font-size:12px;color:var(--muted);">目前還沒有版本記錄</div>'; return; }
+    list.forEach(function(item){
+      const row=document.createElement('div');
+      row.style.cssText='display:flex;flex-direction:column;gap:4px;border:1px solid var(--border);border-radius:6px;padding:6px 8px;background:var(--bg);';
+      const tm=document.createElement('div'); tm.style.cssText='font-size:11.5px;color:var(--ink);';
+      tm.textContent=item.date ? new Date(item.date).toLocaleString('zh-TW') : '（無時間）';
+      const msg=document.createElement('div'); msg.style.cssText='font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      msg.textContent=historyMsgLabel(item.message);
+      const btnRow=document.createElement('div'); btnRow.style.cssText='display:flex;gap:6px;';
+      const viewBtn=document.createElement('button'); viewBtn.textContent='👁 預覽'; viewBtn.style.flex='1';
+      viewBtn.addEventListener('click', function(){ previewHistoryVersion(pubName, item.sha, pw); });
+      const restoreBtn=document.createElement('button'); restoreBtn.textContent='↩ 復原'; restoreBtn.style.flex='1';
+      restoreBtn.addEventListener('click', function(){ restoreHistoryVersion(pubName, item.sha, pw); });
+      btnRow.appendChild(viewBtn); btnRow.appendChild(restoreBtn);
+      row.appendChild(tm); row.appendChild(msg); row.appendChild(btnRow);
+      body.appendChild(row);
+    });
+  }
+  async function loadHistoryList(pubName){
+    const body=document.getElementById('historyBody');
+    body.innerHTML='<div style="font-size:12px;color:var(--muted);">載入中…</div>';
+    let pw=localStorage.getItem(PWKEY)||'';
+    if(!pw){ pw=prompt('發佈密碼：',''); if(pw===null){ body.innerHTML=''; return; } }
+    try{
+      const url=PUB_API+'/history?filename='+encodeURIComponent(pubName+'.html')+'&password='+encodeURIComponent(pw);
+      const res=await fetch(url);
+      const data=await res.json();
+      if(!data.ok){
+        if(res.status===401) localStorage.removeItem(PWKEY);
+        body.innerHTML='<div style="font-size:12px;color:var(--muted);">'+(data.error||'讀取失敗')+'</div>';
+        return;
+      }
+      localStorage.setItem(PWKEY,pw);
+      renderHistoryList(data.history||[], pubName, pw);
+    }catch(e){
+      body.innerHTML='<div style="font-size:12px;color:var(--muted);">連線失敗：'+e.message+'</div>';
+    }
+  }
+  document.getElementById('openHistory').addEventListener('click', function(){
+    const d=activeDoc(); if(!d) return;
+    if(!d.pubName){ alert('請先發佈這個頁面才有版本記錄'); return; }
+    // 先記下按鈕位置再 closeAllPops()：openHistory 按鈕本身位在 popPubSettings 面板裡，
+    // closeAllPops() 會把該面板收合(display:none)，若之後才讀取按鈕座標會全部變成 0，導致版本記錄面板跑到畫面左上角
+    const anchorRect=document.getElementById('openHistory').getBoundingClientRect();
+    closeAllPops();
+    const pop=document.getElementById('popHistory');
+    pop.classList.add('open');
+    function repositionHistoryPop(){
+      pop.style.left=Math.max(6,Math.min(anchorRect.left, vpW()-pop.offsetWidth-8))+'px';
+      pop.style.top=Math.min(anchorRect.bottom+4, vpH()-pop.offsetHeight-8)+'px';
+    }
+    repositionHistoryPop();
+    // 版本列表非同步載入完成後高度會變化（尤其手機screen較短時），重新計算一次位置避免超出視窗底部
+    loadHistoryList(d.pubName).then(repositionHistoryPop);
+  });
+
+  /* ---------- 瀏覽數：作者在編輯器內查詢目前累積次數 ---------- */
+  document.getElementById('checkViewCount').addEventListener('click', async function(){
+    const d=activeDoc(); if(!d) return;
+    const info=document.getElementById('viewCountInfo');
+    if(!d.pubName){ alert('請先發佈這個頁面才有瀏覽數可查'); return; }
+    let pw=localStorage.getItem(PWKEY)||'';
+    if(!pw){ pw=prompt('發佈密碼：',''); if(pw===null) return; }
+    info.textContent='查詢中…';
+    try{
+      const url=PUB_API+'/view?filename='+encodeURIComponent(d.pubName+'.html')+'&password='+encodeURIComponent(pw);
+      const res=await fetch(url);
+      const data=await res.json();
+      if(data.ok){
+        localStorage.setItem(PWKEY,pw);
+        info.textContent='👁 目前瀏覽數：'+data.count;
+      } else {
+        if(res.status===401) localStorage.removeItem(PWKEY);
+        info.textContent='❌ '+(data.error||'查詢失敗');
+      }
+    }catch(e){ info.textContent='❌ 連線失敗：'+e.message; }
+  });
+
+  /* ---------- AI 助手：潤稿／續寫／改語氣／翻譯／摘要 ---------- */
+  // 定位邏輯：優先用目前即時選取範圍，若選取已被點擊面板按鈕清掉了，改用 saveSel() 記住的 savedRange；
+  // 兩者都沒有座標時就退回貼齊 aiAssistBtn 附近（跟既有 positionPop 邏輯一致）
+  function positionPopAtSelection(pop){
+    let rect=null;
+    const s=window.getSelection();
+    if(s && s.rangeCount && editor.contains(s.anchorNode) && s.toString().trim()){
+      rect=s.getRangeAt(0).getBoundingClientRect();
+    } else if(savedRange){
+      rect=savedRange.getBoundingClientRect();
+    }
+    if(!rect || (rect.width===0 && rect.height===0)){
+      positionPop(pop, document.getElementById('aiAssistBtn'));
+      return;
+    }
+    pop.style.left=Math.max(6,Math.min(rect.left, vpW()-pop.offsetWidth-8))+'px';
+    const belowTop=rect.bottom+6;
+    if(belowTop+pop.offsetHeight+8<=vpH()){
+      pop.style.top=belowTop+'px';
+    } else {
+      // 下方空間不夠（手機小螢幕常見，尤其鍵盤彈出時），改顯示在選取範圍上方，避免蓋住剛選取的文字
+      pop.style.top=Math.max(6, rect.top-pop.offsetHeight-6)+'px';
+    }
+  }
+
+  // 選取文字後，浮動選單自動出現在選取範圍附近；取消選取就收起來
+  editor.addEventListener('mouseup', function(){
+    const s=window.getSelection();
+    const text=(s && s.rangeCount && editor.contains(s.anchorNode)) ? s.toString().trim() : '';
+    const pop=document.getElementById('popAiFloat');
+    if(text){ pop.classList.add('open'); positionPopAtSelection(pop); }
+    else { pop.classList.remove('open'); }
+  });
+
+  // 「文字」面板裡的入口按鈕：給不習慣等浮動選單出現的人一個明確按鈕
+  document.getElementById('aiAssistBtn').addEventListener('click', function(){
+    const text=savedRange ? savedRange.toString().trim() : '';
+    if(!text){ alert('請先選取要處理的文字'); return; }
+    closeAllPops();
+    const pop=document.getElementById('popAiFloat');
+    pop.classList.add('open');
+    positionPopAtSelection(pop);
+  });
+
+  function currentSelText(){
+    const s=window.getSelection();
+    if(s && s.rangeCount && editor.contains(s.anchorNode) && s.toString().trim()) return s.toString().trim();
+    return savedRange ? savedRange.toString().trim() : '';
+  }
+
+  async function handleAiAction(action, btn){
+    const text=currentSelText();
+    if(!text){ alert('請先選取要處理的文字'); return; }
+    if(text.length>4000){ alert('選取的文字太長，請選取少一點文字再試（上限 4000 字）'); return; }
+
+    let extra='';
+    if(action==='tone'){
+      const v=prompt('要改成什麼語氣？（例如：正式、輕鬆活潑、專業）','正式');
+      if(v===null) return; extra=v.trim(); if(!extra) return;
+    } else if(action==='translate'){
+      const v=prompt('要翻譯成什麼語言？','英文');
+      if(v===null) return; extra=v.trim(); if(!extra) return;
+    }
+
+    let pw=localStorage.getItem(PWKEY)||'';
+    if(!pw){ pw=prompt('請輸入密碼：',''); if(pw===null) return; }
+
+    const allBtns=document.querySelectorAll('#popAiFloat [data-ai]');
+    const oldLabel=btn.textContent;
+    allBtns.forEach(function(b){ b.disabled=true; });
+    btn.textContent='處理中…';
+
+    try{
+      const res=await fetch(PUB_API+'/ai', { method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ text:text, action:action, extra:extra, password:pw }) });
+      const data=await res.json();
+      if(data.ok){
+        localStorage.setItem(PWKEY,pw);
+        applyAiResult(action, data.result);
+        closeAllPops();
+      } else {
+        if(res.status===401){ localStorage.removeItem(PWKEY); alert('❌ 密碼錯誤，請重新輸入密碼後再試一次'); }
+        else if(res.status===503){ alert('❌ '+(data.error||'AI 功能尚未設定完成，請聯繫管理者設定')); }
+        else { alert('❌ '+(data.error||'AI 處理失敗，請稍後再試')); }
+      }
+    }catch(e){ alert('❌ 連線失敗：'+e.message); }
+    finally{ allBtns.forEach(function(b){ b.disabled=false; }); btn.textContent=oldLabel; }
+  }
+
+  function applyAiResult(action, result){
+    editor.focus(); restoreSel();
+    const s=window.getSelection();
+    if(action==='proofread' || action==='tone' || action==='translate'){
+      document.execCommand('insertText', false, result);
+    } else if(action==='continue'){
+      if(s && s.rangeCount) s.collapseToEnd();
+      document.execCommand('insertText', false, ' '+result);
+    } else if(action==='summarize'){
+      if(s && s.rangeCount) s.collapseToEnd();
+      document.execCommand('insertHTML', false, '<p><i>📝 摘要：'+escapeHtmlText(result)+'</i></p>');
+    }
+    sync(); persist(); saveSel();
+  }
+
+  document.querySelectorAll('#popAiFloat [data-ai]').forEach(function(btn){
+    btn.addEventListener('click', function(){ handleAiAction(btn.dataset.ai, btn); });
   });
 
   // Markdown 匯出
@@ -3812,7 +4208,7 @@ var qrcode = function() {
   hgutter.addEventListener('pointerdown', startDrag('y'));
 
   // 懸浮小視窗
-  function closeAllPops(){ document.querySelectorAll('.pop.open').forEach(function(p){ p.classList.remove('open'); }); }
+  function closeAllPops(){ document.querySelectorAll('.pop.open').forEach(function(p){ p.classList.remove('open'); }); if(window.__editnoteStopVoice) window.__editnoteStopVoice(); }
   function vpW(){ return window.innerWidth||document.documentElement.clientWidth||99999; }
   function vpH(){ return window.innerHeight||document.documentElement.clientHeight||99999; }
   function positionPop(pop,tr){ const r=tr.getBoundingClientRect();
@@ -3917,6 +4313,9 @@ var qrcode = function() {
     if(!d.themeId) d.themeId='default';
     if(typeof d.pubName!=='string') d.pubName='';
     if(typeof d.ogImage!=='string') d.ogImage='';
+    if(typeof d.showViewCount!=='boolean') d.showViewCount=false;
+    if(typeof d.protected!=='boolean') d.protected=false;
+    if(typeof d.pagePassword!=='string') d.pagePassword='';
   });
   if(!docs.find(d=>d.id===activeId)) activeId=docs[0].id;
   loadActive();
