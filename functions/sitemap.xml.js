@@ -9,7 +9,7 @@ const SITE = "https://editnote.pages.dev";
 
 export async function onRequestGet(context) {
   try {
-    const slugs = await listPageSlugs();
+    const slugs = await listPageSlugs(context.env);
     const xml = buildSitemap(slugs);
     return new Response(xml, {
       status: 200,
@@ -23,14 +23,16 @@ export async function onRequestGet(context) {
   }
 }
 
-async function listPageSlugs() {
+// 注意：Cloudflare 的出口 IP 是共用的，未認證呼叫 GitHub API 的 60次/小時額度幾乎必定早就被其他流量用完，
+// 一定要帶 GITHUB_TOKEN（在 Cloudflare Pages 專案的環境變數/secret 設定），額度會提升到 5000次/小時
+async function listPageSlugs(env) {
   const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/pages`;
-  const r = await fetch(url, {
-    headers: {
-      "Accept": "application/vnd.github+json",
-      "User-Agent": "editnote-pages-functions",
-    },
-  });
+  const headers = {
+    "Accept": "application/vnd.github+json",
+    "User-Agent": "editnote-pages-functions",
+  };
+  if (env && env.GITHUB_TOKEN) headers["Authorization"] = "Bearer " + env.GITHUB_TOKEN;
+  const r = await fetch(url, { headers });
   if (!r.ok) throw new Error("GitHub 回應 " + r.status);
   const list = await r.json();
   if (!Array.isArray(list)) throw new Error("GitHub 回傳格式不正確");

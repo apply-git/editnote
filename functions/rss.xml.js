@@ -10,7 +10,7 @@ const MAX_FULL_ITEMS = 30; // 最多只對最新 30 個檔案抓內容做完整 
 
 export async function onRequestGet(context) {
   try {
-    const files = await listPageFiles();
+    const files = await listPageFiles(context.env);
     const xml = await buildRss(files);
     return new Response(xml, {
       status: 200,
@@ -25,14 +25,16 @@ export async function onRequestGet(context) {
 }
 
 // 列出 pages/ 底下所有 .html 檔名，用檔名字母排序後反轉，當作「近似新到舊」（不額外呼叫 commits API 增加負擔）
-async function listPageFiles() {
+// 注意：Cloudflare 的出口 IP 是共用的，未認證呼叫 GitHub API 的 60次/小時額度幾乎必定早就被其他流量用完，
+// 一定要帶 GITHUB_TOKEN（在 Cloudflare Pages 專案的環境變數/secret 設定），額度會提升到 5000次/小時
+async function listPageFiles(env) {
   const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/pages`;
-  const r = await fetch(url, {
-    headers: {
-      "Accept": "application/vnd.github+json",
-      "User-Agent": "editnote-pages-functions",
-    },
-  });
+  const headers = {
+    "Accept": "application/vnd.github+json",
+    "User-Agent": "editnote-pages-functions",
+  };
+  if (env && env.GITHUB_TOKEN) headers["Authorization"] = "Bearer " + env.GITHUB_TOKEN;
+  const r = await fetch(url, { headers });
   if (!r.ok) throw new Error("GitHub 回應 " + r.status);
   const list = await r.json();
   if (!Array.isArray(list)) throw new Error("GitHub 回傳格式不正確");
