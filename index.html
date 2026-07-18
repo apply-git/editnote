@@ -386,9 +386,9 @@
   </div>
   <div class="pop wide" id="popInteractive">
     <div class="pop-head">⚙ 互動區塊<button class="pop-x" title="關閉">×</button></div>
-    <div style="width:340px;max-width:88vw;display:flex;flex-direction:column;gap:8px;">
+    <div style="width:520px;max-width:92vw;box-sizing:border-box;overflow-x:hidden;display:flex;flex-direction:column;gap:8px;">
       <div style="font-size:12px;color:var(--muted);line-height:1.6;">選一個範本（或空白），程式碼可自由改（HTML+CSS+JS）。插入後是頁面裡會動的獨立區塊，發佈出去也能用。</div>
-      <select id="interTemplate" style="width:100%;padding:5px 6px;border:1px solid var(--border);border-radius:6px;background:var(--btn);color:var(--ink);font-size:13px;"></select>
+      <select id="interTemplate" style="width:100%;min-width:0;box-sizing:border-box;padding:5px 6px;border:1px solid var(--border);border-radius:6px;background:var(--btn);color:var(--ink);font-size:13px;"></select>
       <textarea id="interCode" spellcheck="false" wrap="soft" style="width:100%;box-sizing:border-box;height:240px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--btn);color:var(--ink);font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;resize:vertical;white-space:pre-wrap;overflow-wrap:break-word;overflow:auto;"></textarea>
       <div style="display:flex;gap:6px;">
         <button id="interPreview" style="flex:1;justify-content:center;">👁 預覽</button>
