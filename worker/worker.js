@@ -218,6 +218,45 @@ export default {
       }
     }
 
+    // 圖片上傳（#24）：發佈時把內嵌 base64 圖片存到 repo 的 images/，回傳公開 URL，讓發佈頁不用塞肥大的 base64。
+    // 用「內容雜湊」當檔名 → 同一張圖只會存一份（天然去重），也不會被人塞爆 repo。站台密碼保護，不給陌生人上傳。
+    if (request.method === "POST" && url.pathname === "/upload-image") {
+      let ibody;
+      try { ibody = await request.json(); } catch { return json({ error: "資料格式錯誤" }, 400, h); }
+
+      const { dataUrl, password } = ibody || {};
+
+      if (!env.PUBLISH_PASSWORD || password !== env.PUBLISH_PASSWORD)
+        return json({ error: "密碼錯誤" }, 401, h);
+      if (typeof dataUrl !== "string")
+        return json({ error: "沒有圖片可上傳" }, 400, h);
+
+      const mm = dataUrl.match(/^data:image\/([a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/);
+      if (!mm) return json({ error: "圖片格式不支援（需 base64 data URL）" }, 400, h);
+
+      let ext = mm[1].toLowerCase();
+      if (ext === "jpeg") ext = "jpg";
+      if (ext === "svg+xml") ext = "svg";
+      const ALLOWED_EXT = ["jpg", "png", "gif", "webp", "svg", "bmp", "avif"];
+      if (!ALLOWED_EXT.includes(ext))
+        return json({ error: "不支援的圖片類型：" + ext }, 400, h);
+
+      const b64content = mm[2];
+      // 內容雜湊當檔名（取前 24 碼）：同一張圖重複上傳落在同路徑，等於自動去重
+      const hashHex = await hashPassword(b64content);
+      const iname = hashHex.slice(0, 24) + "." + ext;
+      const ipath = `images/${iname}`;
+
+      try {
+        // 已存在就不重傳（省 GitHub API 呼叫、也避免無謂 commit）
+        const existing = await getSha(env, ipath);
+        if (!existing) await putFileRaw(env, ipath, b64content);
+        return json({ ok: true, url: `${SITE}/images/${iname}` }, 200, h);
+      } catch (e) {
+        return json({ error: "圖片上傳失敗：" + e.message }, 500, h);
+      }
+    }
+
     // AI 助手：潤稿／續寫／改語氣／翻譯／摘要，會呼叫 Claude API 花錢，一定要密碼保護，不能讓陌生人濫用
     if (request.method === "POST" && url.pathname === "/ai") {
       let abody;
@@ -388,6 +427,17 @@ async function getSha(env, path) {
 async function putFile(env, path, content, sha) {
   const body = { message: `Publish ${path}`, content: b64(content), branch: BRANCH };
   if (sha) body.sha = sha;
+  const r = await fetch(`${GH}/repos/${OWNER}/${REPO}/contents/${encodeURIComponent(path).replace(/%2F/g, "/")}`, {
+    method: "PUT", headers: ghHeaders(env), body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(r.status + " " + (await r.text()).slice(0, 200));
+  return r.json();
+}
+
+// 圖片用：content 已經是 base64（不像 putFile 會再 b64 一次），直接丟給 GitHub Contents API。
+// 只在檔案不存在時呼叫（內容雜湊命名＝不可變），所以不需要帶 sha。
+async function putFileRaw(env, path, base64Content) {
+  const body = { message: `Upload ${path}`, content: base64Content, branch: BRANCH };
   const r = await fetch(`${GH}/repos/${OWNER}/${REPO}/contents/${encodeURIComponent(path).replace(/%2F/g, "/")}`, {
     method: "PUT", headers: ghHeaders(env), body: JSON.stringify(body),
   });

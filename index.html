@@ -3739,6 +3739,25 @@ var qrcode = function() {
     const pop=document.getElementById('popPubResult'); pop.classList.add('open'); positionPop(pop, document.getElementById('pubWeb'));
   }
 
+  // #24：把 HTML 內嵌的 base64 圖片上傳到 repo images/、換成 URL，縮小發佈頁體積。
+  // 只在「非密碼保護」發佈時呼叫（保護頁內容存 KV，圖片要留 base64 才不會外流到 public repo）。
+  // 同一張圖只上傳一次；單張失敗就保留原本的 base64，不擋整個發佈。
+  async function uploadInlineImages(html, pw){
+    const re=/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g;
+    const seen={}, uniq=[]; let m;
+    while((m=re.exec(html))!==null){ if(!seen[m[0]]){ seen[m[0]]=true; uniq.push(m[0]); } }
+    if(!uniq.length) return html;
+    for(const dataUrl of uniq){
+      try{
+        const res=await fetch(PUB_API+'/upload-image',{ method:'POST', headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({ dataUrl:dataUrl, password:pw }) });
+        const data=await res.json();
+        if(data && data.ok && data.url) html=html.split(dataUrl).join(data.url);
+      }catch(_){ /* 保留 base64 */ }
+    }
+    return html;
+  }
+
   document.getElementById('pubWeb').addEventListener('click', async function(){
     const ad0=activeDoc()||{};
     const isProtected=!!ad0.protected;
@@ -3760,10 +3779,13 @@ var qrcode = function() {
     const prevPubName=ad0.pubName;
     ad0.pubName=fname;
     try{
+      let outHtml=fullDoc(fname);
+      // #24：非保護頁發佈時，先把內嵌 base64 圖片上傳換成 URL（保護頁維持 base64 存 KV，不外流）
+      if(!isProtected){ btn.textContent='上傳圖片…'; try{ outHtml=await uploadInlineImages(outHtml, pw); }catch(_){ } btn.textContent='發佈中…'; }
       const endpoint = isProtected ? (PUB_API+'/publish-protected') : PUB_API;
       const payload = isProtected
-        ? { filename:fname, html:fullDoc(fname), pagePassword:ad0.pagePassword, password:pw }
-        : { filename:fname, html:fullDoc(fname), password:pw };
+        ? { filename:fname, html:outHtml, pagePassword:ad0.pagePassword, password:pw }
+        : { filename:fname, html:outHtml, password:pw };
       const res=await fetch(endpoint,{ method:'POST', headers:{'Content-Type':'application/json'},
         body:JSON.stringify(payload) });
       const data=await res.json();
