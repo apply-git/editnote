@@ -3788,8 +3788,8 @@ var qrcode = function() {
     return msg || '（無說明）';
   }
   async function fetchHistoryContent(pubName, sha, pw){
-    const url=PUB_API+'/history-content?filename='+encodeURIComponent(pubName+'.html')+'&sha='+encodeURIComponent(sha)+'&password='+encodeURIComponent(pw);
-    const res=await fetch(url);
+    const url=PUB_API+'/history-content?filename='+encodeURIComponent(pubName+'.html')+'&sha='+encodeURIComponent(sha);
+    const res=await fetch(url, { headers:{ 'X-Auth-Password': pw } });
     const data=await res.json();
     if(!data.ok){
       if(res.status===401) localStorage.removeItem(PWKEY);
@@ -3847,8 +3847,8 @@ var qrcode = function() {
     let pw=localStorage.getItem(PWKEY)||'';
     if(!pw){ pw=prompt('發佈密碼：',''); if(pw===null){ body.innerHTML=''; return; } }
     try{
-      const url=PUB_API+'/history?filename='+encodeURIComponent(pubName+'.html')+'&password='+encodeURIComponent(pw);
-      const res=await fetch(url);
+      const url=PUB_API+'/history?filename='+encodeURIComponent(pubName+'.html');
+      const res=await fetch(url, { headers:{ 'X-Auth-Password': pw } });
       const data=await res.json();
       if(!data.ok){
         if(res.status===401) localStorage.removeItem(PWKEY);
@@ -3888,8 +3888,8 @@ var qrcode = function() {
     if(!pw){ pw=prompt('發佈密碼：',''); if(pw===null) return; }
     info.textContent='查詢中…';
     try{
-      const url=PUB_API+'/view?filename='+encodeURIComponent(d.pubName+'.html')+'&password='+encodeURIComponent(pw);
-      const res=await fetch(url);
+      const url=PUB_API+'/view?filename='+encodeURIComponent(d.pubName+'.html');
+      const res=await fetch(url, { headers:{ 'X-Auth-Password': pw } });
       const data=await res.json();
       if(data.ok){
         localStorage.setItem(PWKEY,pw);

@@ -19,7 +19,7 @@ function cors(origin) {
   return {
     "Access-Control-Allow-Origin": allow,
     "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, X-Auth-Password",
     "Access-Control-Max-Age": "86400",
   };
 }
@@ -29,7 +29,7 @@ function corsPublic() {
   return {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, X-Auth-Password",
     "Access-Control-Max-Age": "86400",
   };
 }
@@ -77,7 +77,7 @@ export default {
     // 瀏覽數：作者在編輯器內查詢目前次數，需要密碼保護
     if (request.method === "GET" && url.pathname === "/view") {
       const filename = url.searchParams.get("filename") || "";
-      const password = url.searchParams.get("password") || "";
+      const password = request.headers.get("X-Auth-Password") || url.searchParams.get("password") || "";
 
       if (!env.PUBLISH_PASSWORD || password !== env.PUBLISH_PASSWORD)
         return json({ error: "密碼錯誤" }, 401, h);
@@ -119,7 +119,7 @@ export default {
     // 版本記錄：列出某已發佈頁在 GitHub 上的 commit 歷史（最近 20 筆）
     if (request.method === "GET" && url.pathname === "/history") {
       const filename = url.searchParams.get("filename") || "";
-      const password = url.searchParams.get("password") || "";
+      const password = request.headers.get("X-Auth-Password") || url.searchParams.get("password") || "";
 
       if (!env.PUBLISH_PASSWORD || password !== env.PUBLISH_PASSWORD)
         return json({ error: "密碼錯誤" }, 401, h);
@@ -139,7 +139,7 @@ export default {
     if (request.method === "GET" && url.pathname === "/history-content") {
       const filename = url.searchParams.get("filename") || "";
       const sha = url.searchParams.get("sha") || "";
-      const password = url.searchParams.get("password") || "";
+      const password = request.headers.get("X-Auth-Password") || url.searchParams.get("password") || "";
 
       if (!env.PUBLISH_PASSWORD || password !== env.PUBLISH_PASSWORD)
         return json({ error: "密碼錯誤" }, 401, h);
@@ -246,6 +246,10 @@ export default {
       if (!env.ANTHROPIC_API_KEY)
         return json({ error: "AI 功能尚未設定完成，請聯繫管理者設定 ANTHROPIC_API_KEY" }, 503, h);
 
+      // 頻率限制：站台密碼萬一外流，這道防線擋住有人拿去狂打 Claude API 燒錢。放在真正呼叫 API 之前、所有格式驗證之後，讓格式錯的請求不佔用額度
+      const rl = await checkAiRateLimit(env, request);
+      if (!rl.ok) return json({ error: rl.error }, 429, h);
+
       const aiPrompt = buildAiPrompt(action, text, extra);
 
       try {
@@ -306,6 +310,49 @@ export default {
 
 function json(obj, status, h) {
   return new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json", ...h } });
+}
+
+// AI 頻率限制設定：每 IP 每分鐘上限、全站每日總上限。改這兩個數字就能調鬆緊
+const AI_RATE_PER_IP_PER_MIN = 10;
+const AI_RATE_GLOBAL_PER_DAY = 200;
+
+// AI 頻率限制：用 KV 記「每 IP 每分鐘」與「全站每日」兩個計數，超過就擋。
+// KV 是最終一致（非強一致），高併發下計數可能略有誤差，但對個人工具的成本防護已足夠，不追求精準到個位數。
+// key 一律用 ratelimit: 前綴，跟 views: / protected: 不會互撞。
+async function checkAiRateLimit(env, request) {
+  // KV 沒綁好也不要讓 AI 整個掛掉：try 包住，出錯就放行（fail-open），避免限流機制本身變成故障點
+  try {
+    const now = Date.now();
+    const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+    const minuteWindow = Math.floor(now / 60000); // 每 60 秒換一個窗
+    // 用台灣時間（UTC+8）算日期，讓「每日」在台灣午夜歸零，比 UTC 午夜（早上 8 點）直覺
+    const dayKey = new Date(now + 8 * 3600 * 1000).toISOString().slice(0, 10);
+
+    const ipKey = "ratelimit:ai:ip:" + ip + ":" + minuteWindow;
+    const globalKey = "ratelimit:ai:global:" + dayKey;
+
+    const [ipCurRaw, globalCurRaw] = await Promise.all([
+      env.EDITNOTE_KV.get(ipKey),
+      env.EDITNOTE_KV.get(globalKey),
+    ]);
+    const ipCur = parseInt(ipCurRaw) || 0;
+    const globalCur = parseInt(globalCurRaw) || 0;
+
+    if (ipCur >= AI_RATE_PER_IP_PER_MIN)
+      return { ok: false, error: "AI 使用太頻繁，請稍等一分鐘再試（每分鐘上限 " + AI_RATE_PER_IP_PER_MIN + " 次）" };
+    if (globalCur >= AI_RATE_GLOBAL_PER_DAY)
+      return { ok: false, error: "今日 AI 用量已達全站上限，請明天再試（每日上限 " + AI_RATE_GLOBAL_PER_DAY + " 次）" };
+
+    // 通過就各自 +1；TTL 讓 key 自動過期（分鐘窗 60 秒＝KV 最小 TTL；每日窗 86400 秒）
+    await Promise.all([
+      env.EDITNOTE_KV.put(ipKey, String(ipCur + 1), { expirationTtl: 60 }),
+      env.EDITNOTE_KV.put(globalKey, String(globalCur + 1), { expirationTtl: 86400 }),
+    ]);
+
+    return { ok: true };
+  } catch (e) {
+    return { ok: true };
+  }
 }
 
 // AI 助手：依 action 組出送給 Claude 的 prompt，五種動作各自固定模板
