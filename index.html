@@ -259,6 +259,7 @@
   <div class="pop" id="popFile">
     <div class="pop-head">檔案<button class="pop-x" title="關閉">×</button></div>
     <button id="newDoc" title="新增分頁">🆕 新增分頁</button>
+    <button id="openGenPage" title="用一句話讓 AI 生成一頁網頁，開在新分頁">✨ 一句話生成頁面</button>
     <label class="filebtn" title="開啟既有 .html（開成新分頁）">📂 開啟<input id="openFile" type="file" accept=".html,.htm" hidden></label>
     <label class="filebtn" title="匯入 .md 檔（轉成 HTML，開成新分頁）">⬆ 匯入 MD<input id="importMd" type="file" accept=".md,.markdown,text/markdown" hidden></label>
     <button id="openTemplates" data-pop="popTemplates" title="套用網頁範本（開成新分頁）">📄 範本</button>
@@ -361,6 +362,15 @@
   <div class="pop wide" id="popHistory">
     <div class="pop-head">📜 版本記錄<button class="pop-x" title="關閉">×</button></div>
     <div id="historyBody" style="width:250px;display:flex;flex-direction:column;gap:6px;max-height:320px;overflow:auto;"></div>
+  </div>
+  <div class="pop wide" id="popGenPage">
+    <div class="pop-head">✨ 一句話生成頁面<button class="pop-x" title="關閉">×</button></div>
+    <div style="width:250px;display:flex;flex-direction:column;gap:8px;">
+      <div style="font-size:12px;color:var(--muted);">用一句話描述你想要的網頁，AI 會生成內容並開在新分頁（不影響目前這頁）。</div>
+      <textarea id="genPageInput" rows="3" placeholder="例如：一頁介紹我的咖啡店，含營業時間、招牌菜單和聯絡方式" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--btn);color:var(--ink);font-size:13px;resize:vertical;"></textarea>
+      <button id="genPageGo" style="width:100%;justify-content:center;">✨ 生成</button>
+      <div id="genPageInfo" style="font-size:11.5px;color:var(--muted);"></div>
+    </div>
   </div>
   <div class="pop grid wide" id="popAiFloat">
     <div class="pop-head">✨ AI 助手<button class="pop-x" title="關閉">×</button></div>
@@ -3548,6 +3558,48 @@ var qrcode = function() {
   document.getElementById('openLoadPub').addEventListener('click', renderLoadPubList);
   // 已發佈頁清單：用新分頁開啟 /list（管理／刪除所有已發佈的網頁）
   document.getElementById('openPubList').addEventListener('click', function(){ closeAllPops(); window.open(location.origin + '/list.html', '_blank'); });
+
+  /* ---------- #29 一句話生成頁面：描述 → AI 生成內文 HTML → 開新分頁 ---------- */
+  document.getElementById('openGenPage').addEventListener('click', function(){
+    // 先記按鈕座標再 closeAllPops（按鈕位在檔案面板裡，收合後座標會歸零）
+    const anchor=document.getElementById('openGenPage').getBoundingClientRect();
+    closeAllPops();
+    const pop=document.getElementById('popGenPage');
+    pop.classList.add('open');
+    pop.style.left=Math.max(6,Math.min(anchor.left, vpW()-pop.offsetWidth-8))+'px';
+    pop.style.top=Math.min(anchor.bottom+4, vpH()-pop.offsetHeight-8)+'px';
+    const ta=document.getElementById('genPageInput'); if(ta) ta.focus();
+  });
+  document.getElementById('genPageGo').addEventListener('click', async function(){
+    const desc=document.getElementById('genPageInput').value.trim();
+    const info=document.getElementById('genPageInfo');
+    if(!desc){ info.textContent='請先輸入一句描述'; return; }
+    let pw=localStorage.getItem(PWKEY)||'';
+    if(!pw){ pw=prompt('發佈密碼：',''); if(pw===null) return; }
+    const btn=this, old=btn.textContent; btn.disabled=true; btn.textContent='生成中…'; info.textContent='AI 生成中，請稍候…（約需數秒）';
+    try{
+      const res=await fetch(PUB_API+'/ai',{ method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ action:'generatepage', text:desc, password:pw }) });
+      const data=await res.json().catch(function(){ return {}; });
+      if(data.ok && data.result){
+        localStorage.setItem(PWKEY,pw);
+        let body=String(data.result).trim();
+        // 保險：萬一模型仍回了 ```html 圍欄或完整 doc，就去圍欄、抽 <body>
+        body=body.replace(/^```(?:html)?\s*/i,'').replace(/```\s*$/,'').trim();
+        const bm=body.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+        if(bm) body=bm[1].trim();
+        if(!body){ info.textContent='❌ 生成內容是空的，換個描述再試'; return; }
+        newTab(body, desc.slice(0,20).replace(/[\\/:*?"<>|]/g,'')+'.html');
+        document.getElementById('genPageInput').value='';
+        info.textContent='';
+        closeAllPops();
+      } else if(res.status===401){ localStorage.removeItem(PWKEY); info.textContent='❌ 密碼錯誤，請重試'; }
+      else if(res.status===429){ info.textContent='❌ '+(data.error||'使用太頻繁，請稍後再試'); }
+      else if(res.status===503){ info.textContent='❌ '+(data.error||'AI 功能尚未設定完成'); }
+      else { info.textContent='❌ '+(data.error||'生成失敗，請稍後再試'); }
+    }catch(e){ info.textContent='❌ 連線失敗：'+e.message; }
+    finally{ btn.disabled=false; btn.textContent=old; }
+  });
 
   /* ---------- 發佈設定：頁面圖示／網頁主題／分享圖 ---------- */
   const PUB_ICONS=['📝','📄','📰','📌','💡','🚀','🎯','📚','🎨','🏠','⭐','🍀'];

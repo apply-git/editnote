@@ -316,7 +316,7 @@ export default {
       if (text.length > 4000)
         return json({ error: "內容太長，請選取少一點文字再試（上限 4000 字）" }, 400, h);
 
-      const AI_ACTIONS = ["proofread", "continue", "tone", "translate", "summarize"];
+      const AI_ACTIONS = ["proofread", "continue", "tone", "translate", "summarize", "generatepage"];
       if (!AI_ACTIONS.includes(action))
         return json({ error: "不支援的操作類型" }, 400, h);
       if (action === "tone" && (typeof extra !== "string" || !extra.trim()))
@@ -324,9 +324,9 @@ export default {
       if (action === "translate" && (typeof extra !== "string" || !extra.trim()))
         return json({ error: "請提供目標語言" }, 400, h);
 
-      // ANTHROPIC_API_KEY 是 Worker Secret，使用者要自己另外用 wrangler secret put 設定；還沒設定時不能讓 Worker 丟未捕捉例外
-      if (!env.ANTHROPIC_API_KEY)
-        return json({ error: "AI 功能尚未設定完成，請聯繫管理者設定 ANTHROPIC_API_KEY" }, 503, h);
+      // OPENAI_API_KEY 是 Worker Secret，使用者要自己另外用 wrangler secret put 設定；還沒設定時不能讓 Worker 丟未捕捉例外
+      if (!env.OPENAI_API_KEY)
+        return json({ error: "AI 功能尚未設定完成，請聯繫管理者設定 OPENAI_API_KEY" }, 503, h);
 
       // 頻率限制：站台密碼萬一外流，這道防線擋住有人拿去狂打 Claude API 燒錢。放在真正呼叫 API 之前、所有格式驗證之後，讓格式錯的請求不佔用額度
       const rl = await checkAiRateLimit(env, request);
@@ -335,16 +335,16 @@ export default {
       const aiPrompt = buildAiPrompt(action, text, extra);
 
       try {
-        const ar = await fetch("https://api.anthropic.com/v1/messages", {
+        // 改用 OpenAI Chat Completions（模型 gpt-4.1-mini）。之後要換模型只改這裡的 model 字串即可。
+        const ar = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-api-key": env.ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
+            "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
           },
           body: JSON.stringify({
-            model: "claude-haiku-4-5-20251001",
-            max_tokens: 1024,
+            model: "gpt-4.1-mini",
+            max_completion_tokens: action === "generatepage" ? 4000 : 1024,
             messages: [{ role: "user", content: aiPrompt }],
           }),
         });
@@ -355,7 +355,8 @@ export default {
         }
 
         const adata = await ar.json();
-        const result = adata && adata.content && adata.content[0] && adata.content[0].text;
+        // OpenAI 回應結構是 choices[0].message.content（跟 Anthropic 的 content[0].text 不同）
+        const result = adata && adata.choices && adata.choices[0] && adata.choices[0].message && adata.choices[0].message.content;
         if (typeof result !== "string")
           return json({ error: "AI 服務錯誤：回應格式不正確" }, 502, h);
 
@@ -447,6 +448,13 @@ function buildAiPrompt(action, text, extra) {
     return "請把以下文字改寫成「" + extra + "」的語氣，保留原意，只回傳改寫後的文字，不要加任何說明：\n\n" + text;
   if (action === "translate")
     return "請把以下文字翻譯成" + extra + "，只回傳翻譯結果，不要加任何說明：\n\n" + text;
+  if (action === "generatepage")
+    return "你是專業網頁設計助手。請根據下面的描述，生成一個網頁的「內文 HTML」。嚴格要求：" +
+      "(1) 只輸出 <body> 內部的內容，不要 <!doctype>、<html>、<head>、<style>、<script>，也不要 markdown 或 ``` 圍欄；" +
+      "(2) 所有排版一律用 inline style（寫在各元素的 style 屬性裡），確保貼進編輯器就能正確呈現；" +
+      "(3) 用繁體中文，內容要具體、豐富、可直接使用，不要出現「這裡放…」這種佔位文字；" +
+      "(4) 適合手機閱讀，字級與行距舒適，善用標題、段落、清單、色塊、分隔線等排版讓版面美觀；" +
+      "(5) 不要使用外部圖片或連結。只回傳 HTML 本身。\n\n描述：" + text;
   return "請用 2-3 句話摘要以下文字重點，只回傳摘要內容，不要加任何說明：\n\n" + text;
 }
 
