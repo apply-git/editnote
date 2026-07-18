@@ -389,7 +389,7 @@
     <div style="width:340px;max-width:88vw;display:flex;flex-direction:column;gap:8px;">
       <div style="font-size:12px;color:var(--muted);line-height:1.6;">選一個範本（或空白），程式碼可自由改（HTML+CSS+JS）。插入後是頁面裡會動的獨立區塊，發佈出去也能用。</div>
       <select id="interTemplate" style="width:100%;padding:5px 6px;border:1px solid var(--border);border-radius:6px;background:var(--btn);color:var(--ink);font-size:13px;"></select>
-      <textarea id="interCode" spellcheck="false" style="width:100%;box-sizing:border-box;height:200px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--btn);color:var(--ink);font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.5;resize:vertical;white-space:pre;overflow:auto;"></textarea>
+      <textarea id="interCode" spellcheck="false" wrap="soft" style="width:100%;box-sizing:border-box;height:240px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--btn);color:var(--ink);font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;resize:vertical;white-space:pre-wrap;overflow-wrap:break-word;overflow:auto;"></textarea>
       <div style="display:flex;gap:6px;">
         <button id="interPreview" style="flex:1;justify-content:center;">👁 預覽</button>
         <button id="interInsert" style="flex:1;justify-content:center;">插入到頁面</button>
@@ -3538,19 +3538,47 @@ var qrcode = function() {
   /* ---------- 互動區塊：計算器等，包成獨立 iframe，發佈頁上會運作 ---------- */
   // 共用外殼：把「內文」包成完整可運作的小網頁（含樣式與幾個小工具函式），計算器只要寫內文即可
   function interWrap(inner){
-    return '<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'
-      +'*{box-sizing:border-box}body{margin:0;font-family:"Microsoft JhengHei","Segoe UI",system-ui,sans-serif;font-size:15px;color:#1f2937;background:#fff;padding:14px}'
-      +'.c{max-width:460px;margin:0 auto}h3{margin:0 0 10px;font-size:16px}label{display:block;font-size:13px;color:#6b7280;margin:8px 0 3px}'
-      +'input,select{width:100%;padding:8px 10px;font-size:15px;border:1px solid #d1d5db;border-radius:8px;background:#fff;color:#1f2937}'
-      +'button{width:100%;margin-top:12px;padding:10px;font-size:15px;border:0;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer}'
-      +'.r{margin-top:12px;padding:12px;background:#eff6ff;border-radius:8px;font-size:14px;color:#1e3a5f;line-height:1.8}'
-      +'.big{font-size:22px;font-weight:700;color:#1d4ed8}.row{display:flex;gap:8px}.row>*{flex:1}'
-      +'@media(prefers-color-scheme:dark){body{background:#111827;color:#e5e7eb}input,select{background:#0b1220;border-color:#374151;color:#e5e7eb}.r{background:#0b2540;color:#bfdbfe}label{color:#9ca3af}}'
-      +'</style><script>function $(i){return document.getElementById(i)}function v(i){return +$(i).value}function nf(n){if(!isFinite(n))return "—";return (Math.round(n*100)/100).toLocaleString("zh-TW")}function nfi(n){if(!isFinite(n))return "—";return Math.round(n).toLocaleString("zh-TW")}function setout(h){$("out").innerHTML=h}<\/script></head><body><div class="c">'
-      +inner+'</div></body></html>';
+    return '<!doctype html>\n<html lang="zh-Hant">\n<head>\n'
+      +'<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1">\n'
+      +'<style>\n'
+      +'*{box-sizing:border-box}\n'
+      +'body{margin:0;font-family:"Microsoft JhengHei","Segoe UI",system-ui,sans-serif;font-size:15px;color:#1f2937;background:#fff;padding:14px}\n'
+      +'.c{max-width:460px;margin:0 auto}\n'
+      +'h3{margin:0 0 10px;font-size:16px}\n'
+      +'label{display:block;font-size:13px;color:#6b7280;margin:8px 0 3px}\n'
+      +'input,select{width:100%;padding:8px 10px;font-size:15px;border:1px solid #d1d5db;border-radius:8px;background:#fff;color:#1f2937}\n'
+      +'button{width:100%;margin-top:12px;padding:10px;font-size:15px;border:0;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer}\n'
+      +'.r{margin-top:12px;padding:12px;background:#eff6ff;border-radius:8px;font-size:14px;color:#1e3a5f;line-height:1.8}\n'
+      +'.big{font-size:22px;font-weight:700;color:#1d4ed8}\n'
+      +'.row{display:flex;gap:8px} .row>*{flex:1}\n'
+      +'@media(prefers-color-scheme:dark){body{background:#111827;color:#e5e7eb}input,select{background:#0b1220;border-color:#374151;color:#e5e7eb}.r{background:#0b2540;color:#bfdbfe}label{color:#9ca3af}}\n'
+      +'</style>\n'
+      +'<script>\n'
+      +'function $(i){return document.getElementById(i)}\n'
+      +'function v(i){return +$(i).value}\n'
+      +'function nf(n){if(!isFinite(n))return "—"; return (Math.round(n*100)/100).toLocaleString("zh-TW")}\n'
+      +'function nfi(n){if(!isFinite(n))return "—"; return Math.round(n).toLocaleString("zh-TW")}\n'
+      +'function setout(h){$("out").innerHTML=h}\n'
+      +'<\/script>\n'
+      +'</head>\n<body>\n<div class="c">\n'
+      +inner+'\n</div>\n</body>\n</html>';
   }
   var INTER_TEMPLATES=[
     { name:'（空白：自己寫 HTML / CSS / JS）', height:220, code: interWrap('<h3>我的互動區塊</h3>\n<p>在這裡寫 HTML；要互動就加 script。可用小工具：v("id") 讀數字、setout("...") 顯示結果，或自己寫。也能在上方 style 改 CSS。</p>') },
+    { name:'👁 網頁瀏覽計數器（真實計數）', height:210, code: interWrap(`<h3>👁 網頁瀏覽計數器</h3>
+<div id="box" style="min-height:60px">載入中…</div>
+<script>
+// ===== 設定（可改）=====
+var COUNTER_ID = "my-page-1";   // 專屬名稱：不同頁面用不同名稱＝各自計數；相同名稱＝共用一個數字
+var STYLE = "feature";          // 樣式： feature 特色大數字 | badge 徽章 | digits 一格一格 | chinese 國字
+var LABEL = "累計瀏覽";
+var IMG = "";                   // 想在數字上方放圖就填圖片網址（留空＝不放）
+var API = "https://editnote-api.cthouse-lee.workers.dev/view";
+// =======================
+function toCJK(num){num=Math.floor(Math.abs(num));if(num===0)return "零";var d="零一二三四五六七八九",u=["","十","百","千"],b=["","萬","億","兆"];function sec(x){var s="",z=false,i=0;while(x>0){var t=x%10;if(t===0){if(s!=="")z=true;}else{s=d.charAt(t)+u[i]+(z?"零":"")+s;z=false;}x=Math.floor(x/10);i++;}return s;}var g=[];while(num>0){g.push(num%10000);num=Math.floor(num/10000);}var o="";for(var i=g.length-1;i>=0;i--){if(i<g.length-1&&g[i]>0&&g[i]<1000)o+="零";o+=sec(g[i])+(g[i]>0?b[i]:"");}return o.replace(/^一十/,"十");}
+function render(n){var comma=n.toLocaleString("zh-TW");var img=IMG?'<img src="'+IMG+'" style="max-width:130px;border-radius:8px;display:block;margin:0 auto 10px">':"";var h;if(STYLE==="badge"){h='<div style="display:inline-flex;align-items:center;gap:6px;background:#eff6ff;color:#1e3a5f;padding:6px 14px;border-radius:20px;font-size:15px">👁 '+LABEL+' <b style="color:#1d4ed8">'+comma+'</b> 次</div>';}else if(STYLE==="digits"){var bx=comma.split("").map(function(c){return /[0-9]/.test(c)?'<span style="display:inline-block;background:#1e293b;color:#fff;font-weight:800;font-size:28px;padding:6px 10px;border-radius:6px;margin:1px">'+c+'</span>':'<span style="font-size:24px;color:#64748b;padding:0 2px">'+c+'</span>';}).join("");h='<div style="text-align:center"><div style="color:#6b7280;margin-bottom:8px">'+LABEL+'</div>'+bx+'</div>';}else if(STYLE==="chinese"){h='<div style="text-align:center"><div style="color:#6b7280;margin-bottom:6px">'+LABEL+'</div><div style="font-size:30px;font-weight:700;color:#1d4ed8;letter-spacing:3px">'+toCJK(n)+'</div><div style="color:#9ca3af;font-size:12px;margin-top:4px">（'+comma+' 次）</div></div>';}else{h='<div style="text-align:center"><div style="color:#6b7280;margin-bottom:2px">'+LABEL+'</div><div style="font-size:46px;font-weight:800;color:#2563eb;line-height:1.1">'+comma+'</div><div style="color:#9ca3af;font-size:12px">次</div></div>';}$("box").innerHTML=img+h;}
+(function(){var key="cnt_"+COUNTER_ID,cached=null;try{cached=sessionStorage.getItem(key);}catch(e){}if(cached!==null){render(+cached);return;}fetch(API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:COUNTER_ID})}).then(function(r){return r.json();}).then(function(d){if(d&&d.ok){try{sessionStorage.setItem(key,d.count);}catch(e){}render(d.count);}else{render(0);}}).catch(function(){$("box").innerHTML='<div style="color:#9ca3af">計數載入失敗</div>';});})();
+<\/script>`) },
     { name:'🏠 房貸月付金試算', height:340, code: interWrap(`<h3>🏠 房貸月付金試算</h3>
 <label>房屋總價（萬元）</label><input id="mp" type="number" value="1000">
 <label>頭期款（萬元）</label><input id="md" type="number" value="200">
