@@ -353,6 +353,8 @@
       <button id="checkViewCount" title="查詢這個發佈頁目前累積的瀏覽次數" style="width:100%;justify-content:center;">👁 查看目前瀏覽數</button>
       <div id="viewCountInfo" style="font-size:11.5px;color:var(--muted);"></div>
       <button id="openHistory" title="查看這個發佈頁的歷史版本，可預覽或復原舊版" style="width:100%;justify-content:center;">📜 版本記錄</button>
+      <button id="deletePubPage" title="從網路刪除這個已發佈頁，並清掉只有這頁用到的圖片" style="width:100%;justify-content:center;color:#dc2626;border-color:#dc2626;">🗑 刪除已發佈頁</button>
+      <div id="deletePubInfo" style="font-size:11.5px;color:var(--muted);"></div>
     </div>
   </div>
   <div class="pop wide" id="popHistory">
@@ -3921,6 +3923,33 @@ var qrcode = function() {
         info.textContent='❌ '+(data.error||'查詢失敗');
       }
     }catch(e){ info.textContent='❌ 連線失敗：'+e.message; }
+  });
+
+  /* ---------- 刪除已發佈頁：連帶清掉只有這頁用到的圖片 ---------- */
+  document.getElementById('deletePubPage').addEventListener('click', async function(){
+    const d=activeDoc(); if(!d) return;
+    const info=document.getElementById('deletePubInfo');
+    if(!d.pubName){ alert('這個分頁還沒發佈，沒有可刪除的線上頁面'); return; }
+    if(!confirm('確定要從網路刪除「'+d.pubName+'」嗎？\n（只刪線上的已發佈頁，不影響你這裡正在編輯的內容）')) return;
+    if(!confirm('再次確認：真的要永久刪除線上的「'+d.pubName+'」？此動作無法復原。')) return;
+    let pw=localStorage.getItem(PWKEY)||'';
+    if(!pw){ pw=prompt('發佈密碼：',''); if(pw===null) return; }
+    const btn=this, old=btn.textContent; btn.textContent='刪除中…'; btn.disabled=true; info.textContent='';
+    try{
+      const res=await fetch(PUB_API+'/delete-page',{ method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ filename:d.pubName+'.html', password:pw }) });
+      const data=await res.json();
+      if(data.ok){
+        localStorage.setItem(PWKEY,pw);
+        const imgs=(data.deletedImages||[]).length;
+        info.textContent='✅ 已刪除線上頁面'+(imgs?('，並清掉 '+imgs+' 張只有這頁用到的圖片'):'')+'（Pages 部署需一兩分鐘生效）';
+        d.pubName=''; persist();
+      } else {
+        if(res.status===401) localStorage.removeItem(PWKEY);
+        info.textContent='❌ '+(data.error||'刪除失敗');
+      }
+    }catch(e){ info.textContent='❌ 連線失敗：'+e.message; }
+    finally{ btn.textContent=old; btn.disabled=false; }
   });
 
   /* ---------- AI 助手：潤稿／續寫／改語氣／翻譯／摘要 ---------- */

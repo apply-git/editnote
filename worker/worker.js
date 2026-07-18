@@ -116,6 +116,47 @@ export default {
       }
     }
 
+    // 刪除已發佈頁 + 孤兒圖清理：刪掉 pages/X.html，並清掉「只有這頁用到、其他頁都沒引用」的 images/ 圖片
+    if (request.method === "POST" && url.pathname === "/delete-page") {
+      let dpbody;
+      try { dpbody = await request.json(); } catch { return json({ error: "資料格式錯誤" }, 400, h); }
+
+      const { filename, password } = dpbody || {};
+      if (!env.PUBLISH_PASSWORD || password !== env.PUBLISH_PASSWORD)
+        return json({ error: "密碼錯誤" }, 401, h);
+
+      const dpsafe = sanitize(filename);
+      const dppath = `pages/${dpsafe}`;
+
+      try {
+        const sha = await getSha(env, dppath);
+        if (!sha) return json({ error: "找不到該網頁：" + dpsafe }, 404, h);
+
+        // 刪除前先抓這頁內容，記下它引用了哪些 images/
+        let usedByThis = [];
+        try { usedByThis = extractImageNames(await getContentAt(env, dppath, BRANCH)); } catch (_) {}
+
+        await deleteFile(env, dppath, sha);
+
+        // 孤兒圖清理：掃「其餘所有已發佈頁」，這頁用到的圖若沒別人用，就一起刪掉
+        const deletedImages = [];
+        if (usedByThis.length) {
+          const stillUsed = await collectUsedImages(env, dpsafe);
+          for (const img of usedByThis) {
+            if (stillUsed.has(img)) continue;
+            try {
+              const isha = await getSha(env, `images/${img}`);
+              if (isha) { await deleteFile(env, `images/${img}`, isha); deletedImages.push(img); }
+            } catch (_) {}
+          }
+        }
+
+        return json({ ok: true, filename: dpsafe, deletedImages }, 200, h);
+      } catch (e) {
+        return json({ error: "刪除失敗：" + e.message }, 500, h);
+      }
+    }
+
     // 版本記錄：列出某已發佈頁在 GitHub 上的 commit 歷史（最近 20 筆）
     if (request.method === "GET" && url.pathname === "/history") {
       const filename = url.searchParams.get("filename") || "";
@@ -432,6 +473,38 @@ async function putFile(env, path, content, sha) {
   });
   if (!r.ok) throw new Error(r.status + " " + (await r.text()).slice(0, 200));
   return r.json();
+}
+
+// 從 HTML 抽出用到的 images/ 檔名（給刪頁的孤兒圖清理用）
+function extractImageNames(html) {
+  const out = [], seen = {};
+  const re = /images\/([A-Za-z0-9._-]+\.(?:jpe?g|png|gif|webp|svg|bmp|avif))/gi;
+  let m;
+  while ((m = re.exec(html)) !== null) { const n = m[1]; if (!seen[n]) { seen[n] = true; out.push(n); } }
+  return out;
+}
+
+// 列出 repo 某資料夾底下的檔案清單（查不到回空陣列，不當錯誤）
+async function listDir(env, dir) {
+  const r = await fetch(`${GH}/repos/${OWNER}/${REPO}/contents/${dir}?ref=${BRANCH}`, { headers: ghHeaders(env) });
+  if (r.status === 404) return [];
+  if (!r.ok) throw new Error("GitHub 回應 " + r.status);
+  const list = await r.json();
+  return Array.isArray(list) ? list : [];
+}
+
+// 掃「除了 excludeName 以外」的所有 pages/*.html，收集仍被引用的 image 檔名集合（判斷孤兒圖用）
+async function collectUsedImages(env, excludeName) {
+  const used = new Set();
+  const files = await listDir(env, "pages");
+  for (const f of files) {
+    if (f.type !== "file" || !/\.html?$/i.test(f.name) || f.name === excludeName) continue;
+    try {
+      const content = await getContentAt(env, `pages/${f.name}`, BRANCH);
+      for (const img of extractImageNames(content)) used.add(img);
+    } catch (_) {}
+  }
+  return used;
 }
 
 // 圖片用：content 已經是 base64（不像 putFile 會再 b64 一次），直接丟給 GitHub Contents API。

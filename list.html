@@ -79,14 +79,15 @@
     if(!pw){ pw=prompt('發佈密碼：',''); if(pw===null) return; }
     const oldText=btn.textContent; btn.textContent='刪除中…'; btn.disabled=true;
     try{
-      const r=await fetch(PUB_API,{ method:'DELETE', headers:{'Content-Type':'application/json'},
+      const r=await fetch(PUB_API+'/delete-page',{ method:'POST', headers:{'Content-Type':'application/json'},
         body:JSON.stringify({ filename:name+'.html', password:pw }) });
       const data=await r.json().catch(()=>({}));
       if(r.ok && data.ok){
         localStorage.setItem(PWKEY,pw);
         li.remove();
         updateCount();
-        alert('✅ 已刪除「'+name+'」。\n（Cloudflare Pages 部署需一兩分鐘生效，稍後重新整理即可看到變化。）');
+        const imgs=(data.deletedImages||[]).length;
+        alert('✅ 已刪除「'+name+'」'+(imgs?('，並清掉 '+imgs+' 張只有這頁用到的圖片'):'')+'。\n（Cloudflare Pages 部署需一兩分鐘生效，稍後重新整理即可看到變化。）');
       } else {
         if(r.status===401) localStorage.removeItem(PWKEY);
         alert('❌ 刪除失敗：'+(data.error||('HTTP '+r.status)));
