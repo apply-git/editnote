@@ -3930,25 +3930,33 @@ var qrcode = function() {
     const d=activeDoc(); if(!d) return;
     const info=document.getElementById('deletePubInfo');
     if(!d.pubName){ alert('這個分頁還沒發佈，沒有可刪除的線上頁面'); return; }
-    if(!confirm('確定要從網路刪除「'+d.pubName+'」嗎？\n（只刪線上的已發佈頁，不影響你這裡正在編輯的內容）')) return;
-    if(!confirm('再次確認：真的要永久刪除線上的「'+d.pubName+'」？此動作無法復原。')) return;
+    const name=d.pubName;
+    if(!confirm('確定要從網路刪除「'+name+'」嗎？\n只會刪掉線上的已發佈頁（和只有這頁用到的圖片），不影響你這裡正在編輯的內容。\n此動作無法復原。')) return;
     let pw=localStorage.getItem(PWKEY)||'';
     if(!pw){ pw=prompt('發佈密碼：',''); if(pw===null) return; }
-    const btn=this, old=btn.textContent; btn.textContent='刪除中…'; btn.disabled=true; info.textContent='';
+    const btn=this, old=btn.textContent; btn.textContent='刪除中…'; btn.disabled=true; info.textContent='刪除中…';
     try{
       const res=await fetch(PUB_API+'/delete-page',{ method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({ filename:d.pubName+'.html', password:pw }) });
-      const data=await res.json();
+        body:JSON.stringify({ filename:name+'.html', password:pw }) });
+      const data=await res.json().catch(function(){ return {}; });
       if(data.ok){
         localStorage.setItem(PWKEY,pw);
-        const imgs=(data.deletedImages||[]).length;
-        info.textContent='✅ 已刪除線上頁面'+(imgs?('，並清掉 '+imgs+' 張只有這頁用到的圖片'):'')+'（Pages 部署需一兩分鐘生效）';
         d.pubName=''; persist();
+        const imgs=(data.deletedImages||[]).length;
+        const imgMsg=imgs? ('，並一併清掉 '+imgs+' 張只有這頁用到的圖片') : (data.cleanupFailed? '（圖片清理沒完成，可稍後再處理）' : '（這頁沒有專屬圖片要清）');
+        info.textContent='✅ 已刪除「'+name+'」'+(imgs?('（含 '+imgs+' 張圖）'):'');
+        alert('✅ 已從網路刪除「'+name+'」'+imgMsg+'。\n（Cloudflare Pages 部署需一兩分鐘才會反映，稍後重新整理即可。）');
+      } else if(res.status===404){
+        // 頁面在伺服器上已不存在（可能先前已刪除）→ 清掉本地標記，避免一直重複詢問
+        d.pubName=''; persist();
+        info.textContent='ℹ️「'+name+'」線上已不存在';
+        alert('ℹ️「'+name+'」在網路上已經不存在了（可能先前已經刪除過）。\n已把這個分頁標記為「未發佈」，之後不會再重複詢問。');
       } else {
         if(res.status===401) localStorage.removeItem(PWKEY);
         info.textContent='❌ '+(data.error||'刪除失敗');
+        alert('❌ 刪除失敗：'+(data.error||('HTTP '+res.status)));
       }
-    }catch(e){ info.textContent='❌ 連線失敗：'+e.message; }
+    }catch(e){ info.textContent='❌ 連線失敗：'+e.message; alert('❌ 連線失敗：'+e.message); }
     finally{ btn.textContent=old; btn.disabled=false; }
   });
 

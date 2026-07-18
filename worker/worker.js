@@ -138,20 +138,22 @@ export default {
 
         await deleteFile(env, dppath, sha);
 
-        // 孤兒圖清理：掃「其餘所有已發佈頁」，這頁用到的圖若沒別人用，就一起刪掉
-        const deletedImages = [];
-        if (usedByThis.length) {
-          const stillUsed = await collectUsedImages(env, dpsafe);
-          for (const img of usedByThis) {
-            if (stillUsed.has(img)) continue;
-            try {
+        // 孤兒圖清理（best-effort）：掃「其餘所有已發佈頁」，這頁用到的圖若沒別人用就一起刪。
+        // ⚠️ 清圖若中途失敗，絕不能讓整個請求變成錯誤（否則前端會以為「頁面沒刪成功」而卡在重複詢問）。
+        // 所以整段用 try 包住：頁面已經刪掉了，就一定回 ok，清圖成敗只反映在 deletedImages / cleanupFailed。
+        let deletedImages = [], cleanupFailed = false;
+        try {
+          if (usedByThis.length) {
+            const stillUsed = await collectUsedImages(env, dpsafe);
+            for (const img of usedByThis) {
+              if (stillUsed.has(img)) continue;
               const isha = await getSha(env, `images/${img}`);
               if (isha) { await deleteFile(env, `images/${img}`, isha); deletedImages.push(img); }
-            } catch (_) {}
+            }
           }
-        }
+        } catch (_) { cleanupFailed = true; }
 
-        return json({ ok: true, filename: dpsafe, deletedImages }, 200, h);
+        return json({ ok: true, filename: dpsafe, deletedImages, cleanupFailed }, 200, h);
       } catch (e) {
         return json({ error: "刪除失敗：" + e.message }, 500, h);
       }
