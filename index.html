@@ -270,6 +270,7 @@
     <button id="expZip" title="把所有分頁各自輸出成完整網頁，打包成一個 zip 檔下載">📦 匯出全部 (zip)</button>
     <button id="openPubSettings" data-pop="popPubSettings" title="設定此分頁的頁面圖示、發佈主題、分享圖">🎨 發佈設定</button>
     <button id="pubWeb" class="primary" title="發佈到網路（editnote.pages.dev/pages/…，手機也能用）">🌐 發佈到網路</button>
+    <button id="openPubList" title="開啟已發佈頁清單（檢視／刪除所有已發佈的網頁）">🌐 已發佈頁清單</button>
     <button id="pub" title="一鍵存成 index.html 到你選的發佈資料夾">📤 存到資料夾</button>
     <button id="pubDir" title="換一個發佈資料夾（開新網頁專案）">📁 換發佈資料夾</button>
     <button id="trashBtn" data-pop="popTrash" title="還原已刪除的分頁">🗑️ 垃圾桶</button>
@@ -3545,6 +3546,8 @@ var qrcode = function() {
     }catch(e){ list.innerHTML='<div style="font-size:12px;color:var(--muted);">載入清單失敗</div>'; }
   }
   document.getElementById('openLoadPub').addEventListener('click', renderLoadPubList);
+  // 已發佈頁清單：用新分頁開啟 /list（管理／刪除所有已發佈的網頁）
+  document.getElementById('openPubList').addEventListener('click', function(){ closeAllPops(); window.open(location.origin + '/list.html', '_blank'); });
 
   /* ---------- 發佈設定：頁面圖示／網頁主題／分享圖 ---------- */
   const PUB_ICONS=['📝','📄','📰','📌','💡','🚀','🎯','📚','🎨','🏠','⭐','🍀'];
