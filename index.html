@@ -3637,7 +3637,8 @@ var qrcode = function() {
       if(typeof d.pagePassword!=='string') d.pagePassword='';
     });
     if(!docs.find(function(d){ return d.id===activeId; })) activeId=docs[0].id;
-    persist(); loadActive();
+    // 一定要先 loadActive() 把雲端內容載進編輯器，再 persist()；順序反了的話 persist() 會先用「編輯器當下的舊內容」蓋掉剛套用的雲端草稿
+    loadActive(); persist();
     return true;
   }
   function cloudRenderStatus(){
