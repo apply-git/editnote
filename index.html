@@ -254,6 +254,7 @@
     <button id="insTodo" title="插入可勾選待辦清單">☑ 待辦清單</button>
     <button id="insFold" title="插入可摺疊區塊">▸ 摺疊區塊</button>
     <button id="insEmbed" title="嵌入 YouTube 影片、Google 地圖或 .mp4/.webm 影片連結">🎬 嵌入</button>
+    <button id="insInteractive" title="插入互動區塊：計算器等（可自訂 HTML+JS，發佈頁上會動）">⚙ 互動區塊</button>
     <button id="insVoice" title="語音輸入（點擊開始錄音，再點一次或點別處停止，辨識文字會插入游標處）">🎤 語音輸入</button>
   </div>
   <div class="pop" id="popFile">
@@ -381,6 +382,20 @@
       <button id="cloudPushBtn" style="width:100%;justify-content:center;">☁ 上傳到雲端</button>
       <button id="cloudPullBtn" style="width:100%;justify-content:center;">☁ 從雲端取回</button>
       <div id="cloudSyncInfo" style="font-size:11.5px;color:var(--muted);"></div>
+    </div>
+  </div>
+  <div class="pop wide" id="popInteractive">
+    <div class="pop-head">⚙ 互動區塊<button class="pop-x" title="關閉">×</button></div>
+    <div style="width:340px;max-width:88vw;display:flex;flex-direction:column;gap:8px;">
+      <div style="font-size:12px;color:var(--muted);line-height:1.6;">選一個範本（或空白），程式碼可自由改（HTML+CSS+JS）。插入後是頁面裡會動的獨立區塊，發佈出去也能用。</div>
+      <select id="interTemplate" style="width:100%;padding:5px 6px;border:1px solid var(--border);border-radius:6px;background:var(--btn);color:var(--ink);font-size:13px;"></select>
+      <textarea id="interCode" spellcheck="false" style="width:100%;box-sizing:border-box;height:200px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--btn);color:var(--ink);font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.5;resize:vertical;white-space:pre;overflow:auto;"></textarea>
+      <div style="display:flex;gap:6px;">
+        <button id="interPreview" style="flex:1;justify-content:center;">👁 預覽</button>
+        <button id="interInsert" style="flex:1;justify-content:center;">插入到頁面</button>
+      </div>
+      <iframe id="interPreviewFrame" title="預覽" style="display:none;width:100%;border:1px solid var(--border);border-radius:8px;height:300px;background:#fff;"></iframe>
+      <div id="interInfo" style="font-size:11.5px;color:var(--muted);"></div>
     </div>
   </div>
   <div class="pop grid wide" id="popAiFloat">
@@ -3518,6 +3533,133 @@ var qrcode = function() {
     const html=buildEmbedHtml(url.trim());
     if(!html){ alert('❌ 不支援的網址。只接受 YouTube、Google 地圖「嵌入地圖」網址（/maps/embed 開頭）、或 .mp4/.webm 直接連結。'); return; }
     exec('insertHTML',html);
+  });
+
+  /* ---------- 互動區塊：計算器等，包成獨立 iframe，發佈頁上會運作 ---------- */
+  // 共用外殼：把「內文」包成完整可運作的小網頁（含樣式與幾個小工具函式），計算器只要寫內文即可
+  function interWrap(inner){
+    return '<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'
+      +'*{box-sizing:border-box}body{margin:0;font-family:"Microsoft JhengHei","Segoe UI",system-ui,sans-serif;font-size:15px;color:#1f2937;background:#fff;padding:14px}'
+      +'.c{max-width:460px;margin:0 auto}h3{margin:0 0 10px;font-size:16px}label{display:block;font-size:13px;color:#6b7280;margin:8px 0 3px}'
+      +'input,select{width:100%;padding:8px 10px;font-size:15px;border:1px solid #d1d5db;border-radius:8px;background:#fff;color:#1f2937}'
+      +'button{width:100%;margin-top:12px;padding:10px;font-size:15px;border:0;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer}'
+      +'.r{margin-top:12px;padding:12px;background:#eff6ff;border-radius:8px;font-size:14px;color:#1e3a5f;line-height:1.8}'
+      +'.big{font-size:22px;font-weight:700;color:#1d4ed8}.row{display:flex;gap:8px}.row>*{flex:1}'
+      +'@media(prefers-color-scheme:dark){body{background:#111827;color:#e5e7eb}input,select{background:#0b1220;border-color:#374151;color:#e5e7eb}.r{background:#0b2540;color:#bfdbfe}label{color:#9ca3af}}'
+      +'</style><script>function $(i){return document.getElementById(i)}function v(i){return +$(i).value}function nf(n){if(!isFinite(n))return "—";return (Math.round(n*100)/100).toLocaleString("zh-TW")}function nfi(n){if(!isFinite(n))return "—";return Math.round(n).toLocaleString("zh-TW")}function setout(h){$("out").innerHTML=h}<\/script></head><body><div class="c">'
+      +inner+'</div></body></html>';
+  }
+  var INTER_TEMPLATES=[
+    { name:'（空白：自己寫 HTML / CSS / JS）', height:220, code: interWrap('<h3>我的互動區塊</h3>\n<p>在這裡寫 HTML；要互動就加 script。可用小工具：v("id") 讀數字、setout("...") 顯示結果，或自己寫。也能在上方 style 改 CSS。</p>') },
+    { name:'🏠 房貸月付金試算', height:340, code: interWrap(`<h3>🏠 房貸月付金試算</h3>
+<label>房屋總價（萬元）</label><input id="mp" type="number" value="1000">
+<label>頭期款（萬元）</label><input id="md" type="number" value="200">
+<div class="row"><div><label>年利率（%）</label><input id="mr" type="number" value="2.1" step="0.01"></div><div><label>貸款年限（年）</label><input id="my" type="number" value="30"></div></div>
+<button onclick="mcalc()">試算</button>
+<div class="r" id="out">輸入後按試算</div>
+<script>
+function mcalc(){var P=(v("mp")-v("md"))*10000;if(P<=0){setout("貸款金額需大於 0");return;}var r=v("mr")/100/12,n=v("my")*12,m=r===0?P/n:P*r/(1-Math.pow(1+r,-n)),t=m*n;setout("每月應繳 <span class='big'>"+nfi(m)+"</span> 元<br>貸款金額："+nfi(P)+" 元<br>總還款："+nfi(t)+" 元<br>其中利息："+nfi(t-P)+" 元");}
+mcalc();
+<\/script>`) },
+    { name:'📐 坪數・單價換算', height:240, code: interWrap(`<h3>📐 坪數・單價換算</h3>
+<label>坪數</label><input id="ping" type="number" value="30" oninput="acalc()">
+<label>總價（萬元）</label><input id="total" type="number" value="1500" oninput="acalc()">
+<div class="r" id="out"></div>
+<script>
+function acalc(){var p=v("ping"),t=v("total");setout(nf(p)+" 坪 ≈ <span class='big'>"+nf(p*3.305785)+"</span> ㎡<br>單價："+"<span class='big'>"+nf(p>0?t/p:0)+"</span> 萬元/坪");}
+acalc();
+<\/script>`) },
+    { name:'🧾 含稅／未稅換算（營業稅5%）', height:280, code: interWrap(`<h3>🧾 含稅／未稅換算（營業稅 5%）</h3>
+<label>未稅金額</label><input id="net" type="number" value="10000" oninput="tcalc('net')">
+<label>含稅金額</label><input id="gross" type="number" oninput="tcalc('gross')">
+<div class="r" id="out"></div>
+<script>
+function tcalc(s){var net,gross;if(s==="net"){net=v("net");gross=net*1.05;$("gross").value=Math.round(gross);}else{gross=v("gross");net=gross/1.05;$("net").value=Math.round(net);}setout("未稅："+nfi(net)+" 元<br>稅額(5%)："+nfi(gross-net)+" 元<br>含稅：<span class='big'>"+nfi(gross)+"</span> 元");}
+tcalc('net');
+<\/script>`) },
+    { name:'⚖️ BMI 計算', height:280, code: interWrap(`<h3>⚖️ BMI 計算</h3>
+<div class="row"><div><label>身高（公分）</label><input id="ht" type="number" value="170"></div><div><label>體重（公斤）</label><input id="wt" type="number" value="65"></div></div>
+<button onclick="bcalc()">計算</button>
+<div class="r" id="out">輸入後按計算</div>
+<script>
+function bcalc(){var h=v("ht")/100,w=v("wt");if(h<=0){setout("身高需大於 0");return;}var b=w/(h*h),s=b<18.5?"體重過輕":b<24?"正常範圍":b<27?"過重":b<30?"輕度肥胖":b<35?"中度肥胖":"重度肥胖";setout("BMI = <span class='big'>"+nf(b)+"</span><br>分級："+s);}
+bcalc();
+<\/script>`) },
+    { name:'🏷️ 折扣售價計算', height:280, code: interWrap(`<h3>🏷️ 折扣售價計算</h3>
+<div class="row"><div><label>原價</label><input id="orig" type="number" value="1000"></div><div><label>折數（8.5＝85折）</label><input id="disc" type="number" value="8.5" step="0.1"></div></div>
+<button onclick="dcalc()">計算</button>
+<div class="r" id="out">輸入後按計算</div>
+<script>
+function dcalc(){var o=v("orig"),d=v("disc"),price=o*d/10;setout("售價：<span class='big'>"+nfi(price)+"</span> 元<br>省下："+nfi(o-price)+" 元（"+nf((1-d/10)*100)+"% off）");}
+dcalc();
+<\/script>`) },
+    { name:'💰 複利／定存試算', height:300, code: interWrap(`<h3>💰 複利／定存試算</h3>
+<label>本金</label><input id="pri" type="number" value="100000">
+<div class="row"><div><label>年利率（%）</label><input id="rate" type="number" value="1.6" step="0.01"></div><div><label>年數</label><input id="yrs" type="number" value="5"></div></div>
+<button onclick="ccalc()">試算</button>
+<div class="r" id="out">輸入後按試算</div>
+<script>
+function ccalc(){var P=v("pri"),r=v("rate")/100,n=v("yrs"),fv=P*Math.pow(1+r,n);setout("到期金額：<span class='big'>"+nfi(fv)+"</span> 元<br>利息合計："+nfi(fv-P)+" 元");}
+ccalc();
+<\/script>`) },
+    { name:'💱 匯率換算（即時）', height:340, code: interWrap(`<h3>💱 匯率換算（即時匯率）</h3>
+<label>金額</label><input id="amt" type="number" value="1000">
+<div class="row"><div><label>從</label><select id="from"></select></div><div><label>到</label><select id="to"></select></div></div>
+<button onclick="conv()">換算</button>
+<div class="r" id="out">載入即時匯率中…</div>
+<script>
+var RATES=null,UPD="";
+var CUR=[["TWD","台幣"],["USD","美金"],["JPY","日圓"],["CNY","人民幣"],["HKD","港幣"],["EUR","歐元"],["GBP","英鎊"],["KRW","韓元"],["AUD","澳幣"],["CAD","加幣"],["SGD","新加坡幣"],["THB","泰銖"],["MYR","馬幣"],["VND","越南盾"],["PHP","披索"],["IDR","印尼盾"]];
+function fill(id,def){var s=$(id);CUR.forEach(function(c){var o=document.createElement("option");o.value=c[0];o.textContent=c[0]+" "+c[1];if(c[0]===def)o.selected=true;s.appendChild(o);});}
+fill("from","USD");fill("to","TWD");
+// 主來源 open.er-api.com（免金鑰、CORS）；若要備援可改用 https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json
+fetch("https://open.er-api.com/v6/latest/USD").then(function(r){return r.json();}).then(function(d){if(d&&d.result==="success"){RATES=d.rates;UPD=d.time_last_update_utc||"";setout("匯率已載入，輸入金額後按換算。");}else{setout("匯率載入失敗，請稍後再試。");}}).catch(function(){setout("匯率載入失敗（網路或來源問題），請稍後再試。");});
+function conv(){if(!RATES){setout("匯率還沒載入完成，稍等一下");return;}var a=v("amt"),f=$("from").value,t=$("to").value;if(!RATES[f]||!RATES[t]){setout("找不到該貨幣匯率");return;}var res=a/RATES[f]*RATES[t];setout(nf(a)+" "+f+" = <span class='big'>"+nf(res)+"</span> "+t+"<br><span style='font-size:12px;color:#6b7280'>參考匯率更新："+UPD+"</span>");}
+<\/script>`) },
+    { name:'📈 股票殖利率／投報率', height:320, code: interWrap(`<h3>📈 股票殖利率／投報率</h3>
+<label>買入股價（元）</label><input id="sp" type="number" value="50">
+<div class="row"><div><label>每股現金股利（元）</label><input id="cd" type="number" value="2.5" step="0.01"></div><div><label>持有股數</label><input id="sh" type="number" value="1000"></div></div>
+<button onclick="scalc()">計算</button>
+<div class="r" id="out">輸入後按計算</div>
+<script>
+function scalc(){var p=v("sp"),c=v("cd"),n=v("sh");if(p<=0){setout("股價需大於 0");return;}var yld=c/p*100;setout("現金殖利率：<span class='big'>"+nf(yld)+"%</span><br>投入成本："+nfi(p*n)+" 元<br>年領現金股利："+nfi(c*n)+" 元");}
+scalc();
+<\/script>`) },
+    { name:'💳 分期付款試算', height:320, code: interWrap(`<h3>💳 分期付款試算</h3>
+<label>總金額</label><input id="iamt" type="number" value="30000">
+<div class="row"><div><label>分期期數</label><input id="pn" type="number" value="12"></div><div><label>手續費／利息（整筆 %）</label><input id="fee" type="number" value="0" step="0.1"></div></div>
+<button onclick="icalc()">試算</button>
+<div class="r" id="out">輸入後按試算</div>
+<script>
+function icalc(){var a=v("iamt"),n=v("pn"),f=v("fee")/100;if(n<=0){setout("期數需大於 0");return;}var total=a*(1+f);setout("每期應付：<span class='big'>"+nfi(total/n)+"</span> 元<br>總費用："+nfi(total)+" 元<br>多付："+nfi(total-a)+" 元");}
+icalc();
+<\/script>`) }
+  ];
+  (function initInter(){
+    var sel=document.getElementById('interTemplate');
+    INTER_TEMPLATES.forEach(function(t,i){ var o=document.createElement('option'); o.value=i; o.textContent=t.name; sel.appendChild(o); });
+    function loadTpl(){ var t=INTER_TEMPLATES[+sel.value]||INTER_TEMPLATES[0]; document.getElementById('interCode').value=t.code; var f=document.getElementById('interPreviewFrame'); f.style.display='none'; document.getElementById('interInfo').textContent=''; }
+    sel.addEventListener('change', loadTpl);
+    loadTpl();
+    document.getElementById('interPreview').addEventListener('click', function(){
+      var f=document.getElementById('interPreviewFrame'); f.srcdoc=document.getElementById('interCode').value; f.style.display='block';
+    });
+    document.getElementById('interInsert').addEventListener('click', function(){
+      var codeStr=document.getElementById('interCode').value; if(!codeStr.trim()){ document.getElementById('interInfo').textContent='程式碼是空的'; return; }
+      var t=INTER_TEMPLATES[+sel.value]||{}; var hgt=(t&&t.height)||360;
+      var enc=codeStr.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+      var ifr='<iframe class="ed-embed-inter" srcdoc="'+enc+'" style="width:100%;border:1px solid #e5e7eb;border-radius:10px;height:'+hgt+'px;background:#fff;" loading="lazy"></iframe><p><br></p>';
+      exec('insertHTML', ifr);
+      closeAllPops();
+    });
+  })();
+  document.getElementById('insInteractive').addEventListener('click', function(){
+    var anchor=document.getElementById('insInteractive').getBoundingClientRect();
+    closeAllPops();
+    var pop=document.getElementById('popInteractive');
+    pop.classList.add('open');
+    pop.style.left=Math.max(6,Math.min(anchor.left, vpW()-pop.offsetWidth-8))+'px';
+    pop.style.top=Math.min(anchor.bottom+4, vpH()-pop.offsetHeight-8)+'px';
   });
 
   /* ---------- 載入已發佈頁（跨裝置繼續編輯） ---------- */
