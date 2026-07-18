@@ -300,6 +300,38 @@ export default {
       }
     }
 
+    // 草稿雲端同步（#27）：把整包分頁草稿（docs+active+trash+updatedAt）存進 KV，站台密碼保護。
+    // 單一使用者、共用一把發佈密碼，所以全部裝置共用同一個 key「drafts:main」。
+    if (request.method === "POST" && url.pathname === "/draft-push") {
+      let sbody;
+      try { sbody = await request.json(); } catch { return json({ error: "資料格式錯誤" }, 400, h); }
+      const { password, bundle } = sbody || {};
+      if (!env.PUBLISH_PASSWORD || password !== env.PUBLISH_PASSWORD)
+        return json({ error: "密碼錯誤" }, 401, h);
+      if (!bundle || typeof bundle !== "object")
+        return json({ error: "沒有草稿可上傳" }, 400, h);
+      try {
+        await env.EDITNOTE_KV.put("drafts:main", JSON.stringify(bundle));
+        return json({ ok: true, updatedAt: bundle.updatedAt || 0 }, 200, h);
+      } catch (e) {
+        return json({ error: "上傳草稿失敗：" + e.message }, 500, h);
+      }
+    }
+    if (request.method === "POST" && url.pathname === "/draft-pull") {
+      let sbody;
+      try { sbody = await request.json(); } catch { return json({ error: "資料格式錯誤" }, 400, h); }
+      const { password } = sbody || {};
+      if (!env.PUBLISH_PASSWORD || password !== env.PUBLISH_PASSWORD)
+        return json({ error: "密碼錯誤" }, 401, h);
+      try {
+        const raw = await env.EDITNOTE_KV.get("drafts:main");
+        if (!raw) return json({ ok: true, empty: true }, 200, h);
+        return json({ ok: true, bundle: JSON.parse(raw) }, 200, h);
+      } catch (e) {
+        return json({ error: "取回草稿失敗：" + e.message }, 500, h);
+      }
+    }
+
     // AI 助手：潤稿／續寫／改語氣／翻譯／摘要，會呼叫 Claude API 花錢，一定要密碼保護，不能讓陌生人濫用
     if (request.method === "POST" && url.pathname === "/ai") {
       let abody;

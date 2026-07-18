@@ -264,6 +264,7 @@
     <label class="filebtn" title="匯入 .md 檔（轉成 HTML，開成新分頁）">⬆ 匯入 MD<input id="importMd" type="file" accept=".md,.markdown,text/markdown" hidden></label>
     <button id="openTemplates" data-pop="popTemplates" title="套用網頁範本（開成新分頁）">📄 範本</button>
     <button id="openLoadPub" data-pop="popLoadPub" title="從已發佈頁清單載入，或貼上發佈網址繼續編輯">🌐 載入已發佈頁</button>
+    <button id="openCloudSync" title="草稿雲端同步：把所有分頁存到雲端，換裝置時取回繼續編輯">☁ 雲端草稿</button>
     <button id="save" class="primary" title="存檔（用目前檔名）">💾 存檔</button>
     <button id="saveAs" title="另存新檔（自訂檔名）">💾 另存新檔</button>
     <button id="expMd" title="匯出 Markdown (.md)">⬇ 匯出 MD</button>
@@ -370,6 +371,16 @@
       <textarea id="genPageInput" rows="3" placeholder="例如：一頁介紹我的咖啡店，含營業時間、招牌菜單和聯絡方式" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--btn);color:var(--ink);font-size:13px;resize:vertical;"></textarea>
       <button id="genPageGo" style="width:100%;justify-content:center;">✨ 生成</button>
       <div id="genPageInfo" style="font-size:11.5px;color:var(--muted);"></div>
+    </div>
+  </div>
+  <div class="pop wide" id="popCloudSync">
+    <div class="pop-head">☁ 雲端草稿同步<button class="pop-x" title="關閉">×</button></div>
+    <div style="width:250px;display:flex;flex-direction:column;gap:8px;">
+      <div style="font-size:12px;color:var(--muted);line-height:1.6;">把所有分頁草稿存到雲端，換一台裝置時取回繼續編輯。用發佈密碼保護。開啟編輯器時會自動取回較新的雲端草稿。</div>
+      <div id="cloudSyncStatus" style="font-size:11.5px;color:var(--ink);"></div>
+      <button id="cloudPushBtn" style="width:100%;justify-content:center;">☁ 上傳到雲端</button>
+      <button id="cloudPullBtn" style="width:100%;justify-content:center;">☁ 從雲端取回</button>
+      <div id="cloudSyncInfo" style="font-size:11.5px;color:var(--muted);"></div>
     </div>
   </div>
   <div class="pop grid wide" id="popAiFloat">
@@ -2789,6 +2800,8 @@ var qrcode = function() {
   function persist(){
     const d=activeDoc(); if(d){ d.html=editor.innerHTML; d.name=currentName; }
     try{ localStorage.setItem(DKEY, JSON.stringify(docs)); localStorage.setItem(AKEY, activeId); }catch(e){}
+    // #27：任何一次存檔都代表本機草稿有變動、還沒上傳雲端（上傳/取回成功後才會清掉這個旗標）
+    try{ localStorage.setItem('notepad_cloud_dirty','1'); }catch(e){}
   }
   function renderTabs(){
     const wrap=document.getElementById('tabs'); wrap.innerHTML='';
@@ -3599,6 +3612,102 @@ var qrcode = function() {
       else { info.textContent='❌ '+(data.error||'生成失敗，請稍後再試'); }
     }catch(e){ info.textContent='❌ 連線失敗：'+e.message; }
     finally{ btn.disabled=false; btn.textContent=old; }
+  });
+
+  /* ---------- #27 草稿雲端同步（安全版混合C）：開啟自動取回較新的雲端草稿，平常手動上傳 ---------- */
+  const CLOUD_SYNCED_KEY='notepad_cloud_synced_at', CLOUD_DIRTY_KEY='notepad_cloud_dirty';
+  function cloudGetSyncedAt(){ try{ return parseInt(localStorage.getItem(CLOUD_SYNCED_KEY))||0; }catch(e){ return 0; } }
+  function cloudSetSyncedAt(t){ try{ localStorage.setItem(CLOUD_SYNCED_KEY, String(t||0)); }catch(e){} }
+  function cloudIsDirty(){ try{ return localStorage.getItem(CLOUD_DIRTY_KEY)==='1'; }catch(e){ return false; } }
+  function cloudClearDirty(){ try{ localStorage.setItem(CLOUD_DIRTY_KEY,'0'); }catch(e){} }
+  function cloudFmt(t){ return t? new Date(t).toLocaleString('zh-TW') : '（無）'; }
+  function cloudBuildBundle(){ persist(); return { docs:docs, active:activeId, trash:getTrash(), updatedAt:Date.now() }; }
+  function cloudApplyBundle(b){
+    if(!b || !Array.isArray(b.docs) || !b.docs.length) return false;
+    docs=b.docs; activeId=b.active;
+    if(Array.isArray(b.trash)) setTrash(b.trash);
+    docs.forEach(function(d){
+      if(!d.id) d.id=genId();
+      if(!d.name) d.name='未命名.html';
+      if(typeof d.html!=='string') d.html='<p><br></p>';
+      if(!d.icon) d.icon='📝'; if(!d.themeId) d.themeId='default';
+      if(typeof d.pubName!=='string') d.pubName=''; if(typeof d.ogImage!=='string') d.ogImage='';
+      if(typeof d.showViewCount!=='boolean') d.showViewCount=false;
+      if(typeof d.protected!=='boolean') d.protected=false;
+      if(typeof d.pagePassword!=='string') d.pagePassword='';
+    });
+    if(!docs.find(function(d){ return d.id===activeId; })) activeId=docs[0].id;
+    persist(); loadActive();
+    return true;
+  }
+  function cloudRenderStatus(){
+    const st=document.getElementById('cloudSyncStatus'); if(!st) return;
+    st.innerHTML='本機狀態：'+(cloudIsDirty()?'<span style="color:#dc2626;">有未上傳的變更</span>':'已與雲端同步')
+      +'<br>上次同步：'+cloudFmt(cloudGetSyncedAt());
+  }
+  async function cloudPush(){
+    let pw=localStorage.getItem(PWKEY)||''; if(!pw){ pw=prompt('發佈密碼：',''); if(pw===null) return {ok:false,cancel:true}; }
+    const bundle=cloudBuildBundle();
+    try{
+      const res=await fetch(PUB_API+'/draft-push',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ password:pw, bundle:bundle }) });
+      const data=await res.json().catch(function(){ return {}; });
+      if(data.ok){ localStorage.setItem(PWKEY,pw); cloudSetSyncedAt(bundle.updatedAt); cloudClearDirty(); return {ok:true, updatedAt:bundle.updatedAt}; }
+      if(res.status===401) localStorage.removeItem(PWKEY);
+      return {ok:false, error:data.error||('HTTP '+res.status), status:res.status};
+    }catch(e){ return {ok:false, error:'連線失敗：'+e.message}; }
+  }
+  async function cloudFetch(pw){
+    try{
+      const res=await fetch(PUB_API+'/draft-pull',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ password:pw }) });
+      const data=await res.json().catch(function(){ return {}; });
+      if(res.status===401){ localStorage.removeItem(PWKEY); return {ok:false, status:401, error:data.error||'密碼錯誤'}; }
+      if(!data.ok) return {ok:false, error:data.error||('HTTP '+res.status)};
+      if(data.empty) return {ok:true, empty:true};
+      return {ok:true, bundle:data.bundle, updatedAt:(data.bundle&&data.bundle.updatedAt)||0 };
+    }catch(e){ return {ok:false, error:'連線失敗：'+e.message}; }
+  }
+  // 開啟時安全自動取回：雲端較新才動；本機有未上傳變更則先詢問，不默默覆蓋
+  async function cloudAutoPull(){
+    const pw=localStorage.getItem(PWKEY)||''; if(!pw) return; // 沒設過發佈密碼就不自動同步
+    const r=await cloudFetch(pw); if(!r.ok || r.empty) return;
+    const cloudAt=r.updatedAt||0; if(cloudAt<=cloudGetSyncedAt()) return; // 雲端不比本機新
+    if(cloudIsDirty()){
+      if(confirm('雲端有較新的草稿（'+cloudFmt(cloudAt)+'）。\n要取回嗎？這會覆蓋本機目前的分頁（本機未上傳的變更會不見）。')){
+        if(cloudApplyBundle(r.bundle)){ cloudSetSyncedAt(cloudAt); cloudClearDirty(); }
+      }
+    } else if(cloudApplyBundle(r.bundle)){ cloudSetSyncedAt(cloudAt); cloudClearDirty(); }
+  }
+  document.getElementById('openCloudSync').addEventListener('click', function(){
+    const anchor=document.getElementById('openCloudSync').getBoundingClientRect();
+    closeAllPops();
+    const pop=document.getElementById('popCloudSync');
+    pop.classList.add('open');
+    pop.style.left=Math.max(6,Math.min(anchor.left, vpW()-pop.offsetWidth-8))+'px';
+    pop.style.top=Math.min(anchor.bottom+4, vpH()-pop.offsetHeight-8)+'px';
+    cloudRenderStatus();
+    document.getElementById('cloudSyncInfo').textContent='';
+  });
+  document.getElementById('cloudPushBtn').addEventListener('click', async function(){
+    const info=document.getElementById('cloudSyncInfo'); const btn=this, old=btn.textContent;
+    btn.disabled=true; btn.textContent='上傳中…'; info.textContent='上傳中…';
+    const r=await cloudPush();
+    btn.disabled=false; btn.textContent=old;
+    if(r.cancel){ info.textContent=''; return; }
+    if(r.ok){ info.textContent='✅ 已上傳到雲端（'+cloudFmt(r.updatedAt)+'）'; cloudRenderStatus(); }
+    else { info.textContent='❌ '+(r.status===401?'密碼錯誤，請重試':(r.error||'上傳失敗')); }
+  });
+  document.getElementById('cloudPullBtn').addEventListener('click', async function(){
+    const info=document.getElementById('cloudSyncInfo'); const btn=this, old=btn.textContent;
+    let pw=localStorage.getItem(PWKEY)||''; if(!pw){ pw=prompt('發佈密碼：',''); if(pw===null) return; }
+    btn.disabled=true; btn.textContent='取回中…'; info.textContent='取回中…';
+    const r=await cloudFetch(pw);
+    btn.disabled=false; btn.textContent=old;
+    if(!r.ok){ info.textContent='❌ '+(r.status===401?'密碼錯誤，請重試':(r.error||'取回失敗')); return; }
+    if(r.empty){ info.textContent='雲端目前沒有草稿。先按「上傳到雲端」建立一份。'; return; }
+    localStorage.setItem(PWKEY,pw);
+    if(cloudIsDirty() && !confirm('本機有還沒上傳的變更，取回會用雲端版本覆蓋本機目前的分頁，確定嗎？')){ info.textContent='已取消'; return; }
+    if(cloudApplyBundle(r.bundle)){ cloudSetSyncedAt(r.updatedAt); cloudClearDirty(); info.textContent='✅ 已取回雲端草稿（'+cloudFmt(r.updatedAt)+'）'; cloudRenderStatus(); }
+    else info.textContent='❌ 雲端草稿是空的或格式不正確';
   });
 
   /* ---------- 發佈設定：頁面圖示／網頁主題／分享圖 ---------- */
@@ -4434,6 +4543,8 @@ var qrcode = function() {
   });
   if(!docs.find(d=>d.id===activeId)) activeId=docs[0].id;
   loadActive();
+  // #27：啟動後在背景安全地從雲端取回較新的草稿（有未上傳變更會先問，不默默覆蓋）
+  try{ cloudAutoPull(); }catch(e){}
 })();
 </script>
 <script>
