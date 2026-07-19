@@ -3661,7 +3661,96 @@ scalc();
 <script>
 function icalc(){var a=v("iamt"),n=v("pn"),f=v("fee")/100;if(n<=0){setout("期數需大於 0");return;}var total=a*(1+f);setout("每期應付：<span class='big'>"+nfi(total/n)+"</span> 元<br>總費用："+nfi(total)+" 元<br>多付："+nfi(total-a)+" 元");}
 icalc();
-<\/script>`) }
+<\/script>`) },
+    { name:'🏡【CSS】房產物件卡', height:410, code: interWrap(`<style>
+.pc{border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.07)}
+.pc .ph{height:170px;background:#e2e8f0 center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:13px}
+.pc .bd{padding:14px 16px}
+.pc .tt{font-size:18px;font-weight:700;color:#111827;margin:0 0 4px}
+.pc .meta{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.pc .tag{background:#eff6ff;color:#1d4ed8;font-size:12px;padding:3px 9px;border-radius:20px}
+.pc .desc{color:#6b7280;font-size:14px;line-height:1.7}
+.pc .price{font-size:24px;font-weight:800;color:#dc2626;margin-top:10px}
+.pc .price small{font-size:13px;color:#6b7280;font-weight:400}
+</style>
+<div class="pc">
+  <div class="ph" style="background-image:url('')">← 把上面 url('') 填你的照片網址</div>
+  <div class="bd">
+    <div class="tt">陽光三房 · 近捷運</div>
+    <div class="meta"><span class="tag">3房2廳</span><span class="tag">32.5 坪</span><span class="tag">8樓</span><span class="tag">含車位</span></div>
+    <div class="desc">採光通風佳、格局方正，走路 5 分鐘到捷運站，生活機能完整。</div>
+    <div class="price">1,280 <small>萬</small></div>
+  </div>
+</div>`) },
+    { name:'💳【CSS】特色卡片組', height:190, code: interWrap(`<style>
+.fc{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+.fc .card{background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:14px;text-align:center}
+.fc .ic{font-size:30px}.fc .t{font-weight:700;margin:6px 0 4px;color:#111827}.fc .d{font-size:12.5px;color:#6b7280;line-height:1.6}
+</style>
+<div class="fc">
+  <div class="card"><div class="ic">🚇</div><div class="t">交通便利</div><div class="d">近捷運與公車站</div></div>
+  <div class="card"><div class="ic">🏫</div><div class="t">明星學區</div><div class="d">走路可到國中小</div></div>
+  <div class="card"><div class="ic">🌳</div><div class="t">綠意環境</div><div class="d">緊鄰公園綠地</div></div>
+</div>`) },
+    { name:'🏷️【CSS】價格／方案比較表', height:210, code: interWrap(`<style>
+.pt{width:100%;border-collapse:collapse;font-size:14px}
+.pt th,.pt td{border:1px solid #e5e7eb;padding:9px 10px;text-align:center}
+.pt th{background:#1e293b;color:#fff}
+.pt td:first-child{text-align:left;color:#374151;font-weight:600;background:#f8fafc}
+.pt .hl{color:#dc2626;font-weight:700}
+</style>
+<table class="pt">
+<tr><th>項目</th><th>方案 A</th><th>方案 B</th></tr>
+<tr><td>價格</td><td>1,280 萬</td><td class="hl">1,180 萬</td></tr>
+<tr><td>坪數</td><td>32 坪</td><td>28 坪</td></tr>
+<tr><td>車位</td><td>含</td><td>另計</td></tr>
+</table>`) },
+    { name:'📣【CSS】呼籲行動橫幅', height:200, code: interWrap(`<style>
+.cta{background:linear-gradient(135deg,#2563eb,#1e40af);color:#fff;border-radius:14px;padding:22px;text-align:center}
+.cta h2{margin:0 0 6px;font-size:20px}.cta p{margin:0 0 14px;opacity:.92;font-size:14px}
+.cta a{display:inline-block;background:#fff;color:#1d4ed8;font-weight:700;text-decoration:none;padding:10px 22px;border-radius:24px}
+</style>
+<div class="cta">
+  <h2>立即預約看屋</h2>
+  <p>專人帶看、時間彈性，歡迎來電洽詢</p>
+  <a href="tel:0912345678">📞 撥打 0912-345-678</a>
+</div>`) },
+    { name:'💬【CSS】客戶見證／引言', height:170, code: interWrap(`<style>
+.tm{background:#f8fafc;border-left:4px solid #2563eb;border-radius:0 12px 12px 0;padding:16px 18px}
+.tm .q{font-size:15px;color:#374151;line-height:1.8;font-style:italic}
+.tm .who{margin-top:10px;font-size:13px;color:#6b7280;font-weight:600}
+</style>
+<div class="tm">
+  <div class="q">「服務很專業，帶看很有耐心，最後順利買到理想的房子，非常推薦！」</div>
+  <div class="who">— 王先生，內湖成交屋主</div>
+</div>`) },
+    { name:'🖼️【CSS】圖文並排', height:190, code: interWrap(`<style>
+.it{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.it .img{flex:1 1 140px;min-width:140px;height:120px;background:#e2e8f0 center/cover no-repeat;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:13px}
+.it .txt{flex:2 1 200px}
+.it h3{margin:0 0 6px;color:#111827;font-size:16px}.it p{margin:0;color:#6b7280;font-size:14px;line-height:1.8}
+</style>
+<div class="it">
+  <div class="img" style="background-image:url('')">照片</div>
+  <div class="txt"><h3>格局方正 採光極佳</h3><p>三面採光、客廳寬敞，適合三代同堂；廚房獨立設計，衛浴乾溼分離。</p></div>
+</div>`) },
+    { name:'🔖【CSS】標籤／徽章列', height:130, code: interWrap(`<style>
+.tags{display:flex;flex-wrap:wrap;gap:8px}
+.tags span{font-size:13px;padding:5px 12px;border-radius:20px;background:#eff6ff;color:#1d4ed8;border:1px solid #dbeafe}
+</style>
+<div class="tags">
+  <span>🚇 捷運 3 分鐘</span><span>🏫 明星學區</span><span>🌳 公園第一排</span><span>🅿️ 平面車位</span><span>🛗 電梯大樓</span>
+</div>`) },
+    { name:'📊【CSS】統計數字條', height:160, code: interWrap(`<style>
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:10px;text-align:center}
+.stats .s{background:#f8fafc;border-radius:12px;padding:14px 8px}
+.stats .n{font-size:26px;font-weight:800;color:#2563eb}.stats .l{font-size:12.5px;color:#6b7280;margin-top:2px}
+</style>
+<div class="stats">
+  <div class="s"><div class="n">15</div><div class="l">年資歷</div></div>
+  <div class="s"><div class="n">1,200+</div><div class="l">成交件數</div></div>
+  <div class="s"><div class="n">98%</div><div class="l">滿意度</div></div>
+</div>`) }
   ];
   (function initInter(){
     var sel=document.getElementById('interTemplate');

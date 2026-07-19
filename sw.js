@@ -1,6 +1,6 @@
 // editnote Service Worker — 讓編輯器可離線開啟、可安裝成 app
 // 策略：網路優先（online 時永遠拿最新編輯器），失敗才用快取（offline 也能開）
-const CACHE = 'editnote-v17';
+const CACHE = 'editnote-v18';
 const CORE = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png'];
 
 self.addEventListener('install', function(e){
