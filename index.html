@@ -3479,6 +3479,8 @@ var qrcode = function() {
   function fullDocFrom(name, doc, htmlContent, desc){
     // 發佈/存檔時移除編輯器專用的「✎ 編輯」按鈕；wrapper div 與 iframe 保留（發佈頁上仍要能動）
     try{ var _clean=document.createElement('div'); _clean.innerHTML=htmlContent; _clean.querySelectorAll('.ed-inter-edit').forEach(function(b){ b.remove(); }); htmlContent=_clean.innerHTML; }catch(_e){}
+    // desc 是呼叫端從「未清除」內容先算好傳入的，會把按鈕文字帶進 og:description——清完內文後一律重算才正確
+    try{ desc = plainDescriptionFromHtml(htmlContent); }catch(_e){}
     const slug=name.replace(/\.html?$/i,'');
     const ad=doc||{};
     const icon=ad.icon||'📝', themeId=ad.themeId||'default';
