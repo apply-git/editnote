@@ -11,11 +11,11 @@
   * { box-sizing: border-box; }
   :root{
     --bg:#f4f5f7; --panel:#ffffff; --border:#d9dce1; --ink:#1f2328;
-    --muted:#6b7280; --accent:#2563eb; --toolbar:#fbfcfd; --btn:#ffffff; --btnhover:#eef2ff;
+    --muted:#6b7280; --accent:#2563eb; --toolbar:#fbfcfd; --btn:#ffffff; --btnhover:#eef2ff; --danger:#dc2626;
   }
   :root[data-theme="dark"]{
     --bg:#1a1b1e; --panel:#26282c; --border:#3a3d43; --ink:#e6e6e6;
-    --muted:#9aa0a6; --accent:#60a5fa; --toolbar:#212327; --btn:#2f3136; --btnhover:#3a3d44;
+    --muted:#9aa0a6; --accent:#60a5fa; --toolbar:#212327; --btn:#2f3136; --btnhover:#3a3d44; --danger:#f87171;
   }
   html,body{ margin:0; height:100%; font-family:"Microsoft JhengHei","Segoe UI",system-ui,sans-serif; color:var(--ink); background:var(--bg); }
   #app{ display:flex; flex-direction:column; height:100vh; }
@@ -75,7 +75,7 @@
     padding:1px 2px 6px; margin-bottom:4px; border-bottom:1px solid var(--border); }
   .pop-x{ border:0 !important; background:transparent !important; color:var(--muted) !important;
     font-size:15px; padding:0 4px !important; line-height:1; cursor:pointer; }
-  .pop-x:hover{ color:#e11d48 !important; }
+  .pop-x:hover{ color:var(--danger) !important; }
 
   /* 分頁列 */
   #tabbar{ display:flex; align-items:stretch; gap:2px; padding:4px 8px 0; background:var(--toolbar); border-bottom:1px solid var(--border); overflow-x:auto; }
@@ -85,7 +85,7 @@
   :root[data-theme="dark"] .tab.active{ background:#2f3136; }
   .tab .tname{ overflow:hidden; text-overflow:ellipsis; max-width:160px; }
   .tab .x{ border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:13px; padding:0 2px; line-height:1; }
-  .tab .x:hover{ color:#e11d48; }
+  .tab .x:hover{ color:var(--danger); }
   #newTab{ align-self:center; border:1px solid var(--border); background:var(--btn); color:var(--ink); border-radius:6px; padding:4px 9px; font-size:14px; cursor:pointer; margin-left:2px; }
 
   /* 主體 */
@@ -190,6 +190,7 @@
     #findPanel{ left:8px; right:8px; top:auto; bottom:12px; width:auto; }
     #app.outline-on #outlineSidebar{ position:fixed; top:0; left:0; height:100%; width:80vw; max-width:300px; z-index:46; box-shadow:0 8px 30px rgba(0,0,0,.35); }
     #app.outline-on #outlineBackdrop{ display:block; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:45; }
+    #copyright{ display:none; }
   }
 </style>
 
@@ -257,6 +258,21 @@
     <button id="insEmbed" title="嵌入 YouTube 影片、Google 地圖或 .mp4/.webm 影片連結">🎬 嵌入</button>
     <button id="insInteractive" title="插入互動區塊：計算器等（可自訂 HTML+JS，發佈頁上會動）">⚙ 互動區塊</button>
     <button id="insVoice" title="語音輸入（點擊開始錄音，再點一次或點別處停止，辨識文字會插入游標處）">🎤 語音輸入</button>
+  </div>
+  <div class="pop wide" id="popInsCode" style="width:400px;max-width:92vw;">
+    <div class="pop-head">🖥 插入程式碼區塊<button class="pop-x" title="關閉">×</button></div>
+    <div style="width:100%;box-sizing:border-box;overflow-x:hidden;display:flex;flex-direction:column;gap:8px;max-height:78vh;overflow-y:auto;">
+      <div style="font-size:12px;color:var(--muted);">貼上程式碼、選語言，插入後會自動上色（發佈出去也會保留顏色）。</div>
+      <select id="insCodeLang" style="width:100%;box-sizing:border-box;padding:5px 6px;border:1px solid var(--border);border-radius:6px;background:var(--btn);color:var(--ink);font-size:13px;">
+        <option value="auto">自動偵測語言</option>
+        <option value="html">HTML</option>
+        <option value="js">JavaScript</option>
+        <option value="python">Python</option>
+        <option value="plain">純文字（不上色）</option>
+      </select>
+      <textarea id="insCodeInput" rows="8" spellcheck="false" placeholder="在這裡貼上程式碼…" style="width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--btn);color:var(--ink);font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;resize:vertical;white-space:pre;overflow:auto;"></textarea>
+      <button id="insCodeGo" style="width:100%;justify-content:center;">插入程式碼區塊</button>
+    </div>
   </div>
   <div class="pop" id="popFile">
     <div class="pop-head">檔案<button class="pop-x" title="關閉">×</button></div>
@@ -358,7 +374,7 @@
       <button id="checkViewCount" title="查詢這個發佈頁目前累積的瀏覽次數" style="width:100%;justify-content:center;">👁 查看目前瀏覽數</button>
       <div id="viewCountInfo" style="font-size:11.5px;color:var(--muted);"></div>
       <button id="openHistory" title="查看這個發佈頁的歷史版本，可預覽或復原舊版" style="width:100%;justify-content:center;">📜 版本記錄</button>
-      <button id="deletePubPage" title="從網路刪除這個已發佈頁，並清掉只有這頁用到的圖片" style="width:100%;justify-content:center;color:#dc2626;border-color:#dc2626;">🗑 刪除已發佈頁</button>
+      <button id="deletePubPage" title="從網路刪除這個已發佈頁，並清掉只有這頁用到的圖片" style="width:100%;justify-content:center;color:var(--danger);border-color:var(--danger);">🗑 刪除已發佈頁</button>
       <div id="deletePubInfo" style="font-size:11.5px;color:var(--muted);"></div>
     </div>
   </div>
@@ -387,7 +403,7 @@
   </div>
   <div class="pop wide" id="popInteractive" style="width:540px;max-width:94vw;">
     <div class="pop-head">⚙ 互動區塊<button class="pop-x" title="關閉">×</button></div>
-    <div style="width:100%;box-sizing:border-box;overflow-x:hidden;display:flex;flex-direction:column;gap:8px;">
+    <div style="width:100%;box-sizing:border-box;overflow-x:hidden;display:flex;flex-direction:column;gap:8px;max-height:78vh;overflow-y:auto;">
       <div style="font-size:12px;color:var(--muted);line-height:1.6;">選一個範本（或空白），程式碼可自由改（HTML+CSS+JS）。插入後是頁面裡會動的獨立區塊，發佈出去也能用。</div>
       <select id="interTemplate" style="width:100%;min-width:0;box-sizing:border-box;padding:5px 6px;border:1px solid var(--border);border-radius:6px;background:var(--btn);color:var(--ink);font-size:13px;"></select>
       <textarea id="interCode" spellcheck="false" wrap="soft" style="width:100%;box-sizing:border-box;height:240px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--btn);color:var(--ink);font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;resize:vertical;white-space:pre-wrap;overflow-wrap:break-word;overflow:auto;"></textarea>
@@ -2831,7 +2847,7 @@ var qrcode = function() {
       wrap.appendChild(t);
     });
   }
-  function loadActive(){ const d=activeDoc(); editor.innerHTML=d.html; currentName=d.name; fileNameEl.textContent=currentName; sync(); renderTabs(); if(app.classList.contains('outline-on')) renderOutline(); }
+  function loadActive(){ const d=activeDoc(); if(!d) return; editor.innerHTML=d.html; currentName=d.name; fileNameEl.textContent=currentName; sync(); renderTabs(); if(app.classList.contains('outline-on')) renderOutline(); }
   function switchTo(id){ persist(); activeId=id; loadActive(); try{ localStorage.setItem(AKEY,activeId); }catch(e){} }
   function newTab(html,name,opts){
     opts=opts||{}; persist(); const id=genId();
@@ -2853,7 +2869,7 @@ var qrcode = function() {
     const i=docs.findIndex(d=>d.id===id); if(i<0) return;
     const doc=docs[i]; if(doc){ trashPush(doc.name, doc.id===activeId?editor.innerHTML:doc.html); }
     if(docs.length===1){ docs[0]={id:genId(),name:'未命名.html',html:'<p><br></p>',icon:'📝',themeId:'default',pubName:'',ogImage:'',showViewCount:false,protected:false,pagePassword:''}; activeId=docs[0].id; }
-    else { const wasActive=(id===activeId); docs.splice(i,1); if(wasActive) activeId=docs[Math.max(0,i-1)].id; }
+    else { const wasActive=(id===activeId); docs.splice(i,1); if(!docs.length) return; if(wasActive) activeId=docs[Math.max(0,i-1)].id; }
     loadActive(); persist();
   }
   document.getElementById('newTab').addEventListener('click', function(){ newTab(); });
@@ -3087,9 +3103,80 @@ var qrcode = function() {
       root.removeAttribute('id');
     }
   }
+  /* ---------- 程式碼區塊語法高亮：極簡 regex tokenizer，不依賴外部函式庫 ---------- */
+  function tinyEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function tinyTok(str,re,fn){
+    var out='', last=0, m; re.lastIndex=0;
+    while((m=re.exec(str))){
+      if(m.index>last) out+=tinyEsc(str.slice(last,m.index));
+      out+=fn(m); last=re.lastIndex;
+      if(m[0]==='') re.lastIndex++;
+    }
+    out+=tinyEsc(str.slice(last));
+    return out;
+  }
+  var TINY_RE_JS=/(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|('(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`)|\b(function|return|var|let|const|if|else|for|while|new|typeof|class|async|await|try|catch)\b|\b(\d+(?:\.\d+)?)\b/g;
+  var TINY_RE_PY=/(#[^\n]*)|('''[\s\S]*?'''|"""[\s\S]*?"""|'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*")|\b(def|return|import|from|if|elif|else|for|while|class|try|except|with|as|lambda|None|True|False)\b|\b(\d+(?:\.\d+)?)\b/g;
+  var TINY_RE_HTML=/(<!--[\s\S]*?-->)|(<\/?[a-zA-Z][\w:-]*)|([a-zA-Z_:][\w:.-]*)(=)("[^"]*"|'[^']*')/g;
+  function tinyHlJs(str){
+    return tinyTok(str,TINY_RE_JS,function(m){
+      if(m[1]) return '<span style="color:#94a3b8">'+tinyEsc(m[1])+'</span>';
+      if(m[2]) return '<span style="color:#4ade80">'+tinyEsc(m[2])+'</span>';
+      if(m[3]) return '<span style="color:#c084fc">'+tinyEsc(m[3])+'</span>';
+      return '<span style="color:#fbbf24">'+tinyEsc(m[4])+'</span>';
+    });
+  }
+  function tinyHlPython(str){
+    return tinyTok(str,TINY_RE_PY,function(m){
+      if(m[1]) return '<span style="color:#94a3b8">'+tinyEsc(m[1])+'</span>';
+      if(m[2]) return '<span style="color:#4ade80">'+tinyEsc(m[2])+'</span>';
+      if(m[3]) return '<span style="color:#c084fc">'+tinyEsc(m[3])+'</span>';
+      return '<span style="color:#fbbf24">'+tinyEsc(m[4])+'</span>';
+    });
+  }
+  function tinyHlHtml(str){
+    return tinyTok(str,TINY_RE_HTML,function(m){
+      if(m[1]) return '<span style="color:#94a3b8">'+tinyEsc(m[1])+'</span>';
+      if(m[2]) return '<span style="color:#f87171">'+tinyEsc(m[2])+'</span>';
+      if(m[3]) return '<span style="color:#fbbf24">'+tinyEsc(m[3])+'</span>=<span style="color:#4ade80">'+tinyEsc(m[5])+'</span>';
+      return tinyEsc(m[0]);
+    });
+  }
+  function tinyDetectLang(str){
+    if(/<\/?[a-zA-Z][^>]*>/.test(str)) return 'html';
+    if(/\b(?:def|import)\b/.test(str)) return 'python';
+    return 'js';
+  }
+  // 語法高亮總入口：lang 為 html/js/python/auto，回傳已上色（inline style）的 HTML 字串
+  function tinyHighlight(str,lang){
+    str=String(str==null?'':str);
+    var L=lang||'auto'; if(L==='auto') L=tinyDetectLang(str);
+    if(L==='html') return tinyHlHtml(str);
+    if(L==='python') return tinyHlPython(str);
+    return tinyHlJs(str);
+  }
   document.getElementById('insCode').addEventListener('click', function(){
+    // 先記按鈕座標再 closeAllPops（按鈕位在「插入」面板裡，收合後座標會歸零）
+    const anchor=document.getElementById('insCode').getBoundingClientRect();
+    closeAllPops();
+    const pop=document.getElementById('popInsCode');
+    pop.classList.add('open');
+    pop.style.left=Math.max(6,Math.min(anchor.left, vpW()-pop.offsetWidth-8))+'px';
+    pop.style.top=Math.min(anchor.bottom+4, vpH()-pop.offsetHeight-8)+'px';
+    const ta=document.getElementById('insCodeInput'); if(ta) ta.value='';
+  });
+  document.getElementById('insCodeGo').addEventListener('click', function(){
+    const lang=document.getElementById('insCodeLang').value;
+    const raw=document.getElementById('insCodeInput').value;
     const id=uid();
-    insertBlock('<pre class="ed-code" id="'+id+'"><code><br></code></pre><p><br></p>', id, 'code', false);
+    if(lang==='plain'){
+      const body=raw? tinyEsc(raw) : '<br>';
+      insertBlock('<pre class="ed-code" id="'+id+'"><code>'+body+'</code></pre><p><br></p>', id, 'code', false);
+    } else {
+      const body=raw? tinyHighlight(raw, lang) : '<br>';
+      insertBlock('<pre class="ed-code" id="'+id+'" style="background:#0f172a;color:#e2e8f0;padding:12px;border-radius:8px;overflow:auto;font-family:Consolas,\'Courier New\',monospace;font-size:13px;line-height:1.6;"><code>'+body+'</code></pre><p><br></p>', id, 'code', false);
+    }
+    closeAllPops();
   });
   document.getElementById('insCalloutInfo').addEventListener('click', function(){
     const id=uid();
@@ -3390,6 +3477,8 @@ var qrcode = function() {
   // 組完整發佈用 HTML；doc 提供 icon/themeId/ogImage 中繼資料，htmlContent/desc 另外傳入
   // （拆出來是給「匯出全部分頁」重用：非目前作用中分頁不能吃即時編輯區內容）
   function fullDocFrom(name, doc, htmlContent, desc){
+    // 發佈/存檔時移除編輯器專用的「✎ 編輯」按鈕；wrapper div 與 iframe 保留（發佈頁上仍要能動）
+    try{ var _clean=document.createElement('div'); _clean.innerHTML=htmlContent; _clean.querySelectorAll('.ed-inter-edit').forEach(function(b){ b.remove(); }); htmlContent=_clean.innerHTML; }catch(_e){}
     const slug=name.replace(/\.html?$/i,'');
     const ad=doc||{};
     const icon=ad.icon||'📝', themeId=ad.themeId||'default';
@@ -3641,8 +3730,20 @@ var RATES=null,UPD="";
 var CUR=[["TWD","台幣"],["USD","美金"],["JPY","日圓"],["CNY","人民幣"],["HKD","港幣"],["EUR","歐元"],["GBP","英鎊"],["KRW","韓元"],["AUD","澳幣"],["CAD","加幣"],["SGD","新加坡幣"],["THB","泰銖"],["MYR","馬幣"],["VND","越南盾"],["PHP","披索"],["IDR","印尼盾"]];
 function fill(id,def){var s=$(id);CUR.forEach(function(c){var o=document.createElement("option");o.value=c[0];o.textContent=c[0]+" "+c[1];if(c[0]===def)o.selected=true;s.appendChild(o);});}
 fill("from","USD");fill("to","TWD");
-// 主來源 open.er-api.com（免金鑰、CORS）；若要備援可改用 https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json
-fetch("https://open.er-api.com/v6/latest/USD").then(function(r){return r.json();}).then(function(d){if(d&&d.result==="success"){RATES=d.rates;UPD=d.time_last_update_utc||"";setout("匯率已載入，輸入金額後按換算。");}else{setout("匯率載入失敗，請稍後再試。");}}).catch(function(){setout("匯率載入失敗（網路或來源問題），請稍後再試。");});
+// 主來源 open.er-api.com（免金鑰、CORS）；失敗時自動改用備援 jsdelivr 匯率來源
+function loadFallbackRates(){
+  fetch("https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json").then(function(r){return r.json();}).then(function(d){
+    if(d&&d.usd){
+      var rt={};
+      for(var k in d.usd){ rt[k.toUpperCase()]=d.usd[k]; }
+      RATES=rt; UPD=d.date||"";
+      setout("匯率已載入（備援來源），輸入金額後按換算。");
+    }else{
+      setout("匯率載入失敗，請稍後再試。");
+    }
+  }).catch(function(){ setout("匯率載入失敗（網路或來源問題），請稍後再試。"); });
+}
+fetch("https://open.er-api.com/v6/latest/USD").then(function(r){return r.json();}).then(function(d){if(d&&d.result==="success"){RATES=d.rates;UPD=d.time_last_update_utc||"";setout("匯率已載入，輸入金額後按換算。");}else{loadFallbackRates();}}).catch(function(){loadFallbackRates();});
 function conv(){if(!RATES){setout("匯率還沒載入完成，稍等一下");return;}var a=v("amt"),f=$("from").value,t=$("to").value;if(!RATES[f]||!RATES[t]){setout("找不到該貨幣匯率");return;}var res=a/RATES[f]*RATES[t];setout(nf(a)+" "+f+" = <span class='big'>"+nf(res)+"</span> "+t+"<br><span style='font-size:12px;color:#6b7280'>參考匯率更新："+UPD+"</span>");}
 <\/script>`) },
     { name:'📈 股票殖利率／投報率', height:320, code: interWrap(`<h3>📈 股票殖利率／投報率</h3>
@@ -3753,6 +3854,7 @@ icalc();
   <div class="s"><div class="n">98%</div><div class="l">滿意度</div></div>
 </div>`) }
   ];
+  var interEditTarget=null;
   (function initInter(){
     var sel=document.getElementById('interTemplate');
     INTER_TEMPLATES.forEach(function(t,i){ var o=document.createElement('option'); o.value=i; o.textContent=t.name; sel.appendChild(o); });
@@ -3764,14 +3866,44 @@ icalc();
     });
     document.getElementById('interInsert').addEventListener('click', function(){
       var codeStr=document.getElementById('interCode').value; if(!codeStr.trim()){ document.getElementById('interInfo').textContent='程式碼是空的'; return; }
+      // 就地編輯模式：有目標且仍在文件內就直接更新 srcdoc（setAttribute 給原始字串，DOM 自行編碼）
+      if(interEditTarget && document.contains(interEditTarget)){
+        interEditTarget.setAttribute('srcdoc', codeStr);
+        sync(); persist();
+        interEditTarget=null;
+        document.getElementById('interInsert').textContent='插入到頁面';
+        closeAllPops();
+        return;
+      }
+      interEditTarget=null;
       var t=INTER_TEMPLATES[+sel.value]||{}; var hgt=(t&&t.height)||360;
       var enc=codeStr.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
-      var ifr='<iframe class="ed-embed-inter" srcdoc="'+enc+'" style="width:100%;border:1px solid #e5e7eb;border-radius:10px;height:'+hgt+'px;background:#fff;" loading="lazy"></iframe><p><br></p>';
+      var ifr='<div class="ed-inter" contenteditable="false" style="position:relative;margin:8px 0;"><iframe class="ed-embed-inter" srcdoc="'+enc+'" style="width:100%;border:1px solid #e5e7eb;border-radius:10px;height:'+hgt+'px;background:#fff;" loading="lazy"></iframe><button class="ed-inter-edit" contenteditable="false" style="position:absolute;top:6px;right:6px;z-index:2;font-size:12px;padding:3px 8px;border:1px solid #cbd5e1;border-radius:6px;background:rgba(255,255,255,.92);color:#334155;cursor:pointer;">✎ 編輯</button></div><p><br></p>';
       exec('insertHTML', ifr);
       closeAllPops();
     });
   })();
+  // 就地編輯：點區塊右上「✎ 編輯」把該互動區塊載回面板編輯
+  editor.addEventListener('click', function(e){
+    var btn=e.target.closest?e.target.closest('.ed-inter-edit'):null; if(!btn) return;
+    e.preventDefault();
+    var wrap=btn.closest('.ed-inter'); if(!wrap) return;
+    var ifr=wrap.querySelector('iframe.ed-embed-inter'); if(!ifr) return;
+    interEditTarget=ifr;
+    document.getElementById('interCode').value=ifr.getAttribute('srcdoc')||'';
+    var pf=document.getElementById('interPreviewFrame'); if(pf) pf.style.display='none';
+    document.getElementById('interInfo').textContent='';
+    document.getElementById('interInsert').textContent='更新此區塊';
+    var anchor=document.getElementById('insInteractive').getBoundingClientRect();
+    closeAllPops();
+    var pop=document.getElementById('popInteractive');
+    pop.classList.add('open');
+    pop.style.left=Math.max(6,Math.min(anchor.left, vpW()-pop.offsetWidth-8))+'px';
+    pop.style.top=Math.min(anchor.bottom+4, vpH()-pop.offsetHeight-8)+'px';
+  });
   document.getElementById('insInteractive').addEventListener('click', function(){
+    interEditTarget=null;
+    document.getElementById('interInsert').textContent='插入到頁面';
     var anchor=document.getElementById('insInteractive').getBoundingClientRect();
     closeAllPops();
     var pop=document.getElementById('popInteractive');
